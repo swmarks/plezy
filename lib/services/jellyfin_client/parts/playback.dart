@@ -753,7 +753,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
               'Container': 'ts',
               'Protocol': 'hls',
               'VideoCodec': 'hevc,h264',
-              'AudioCodec': 'aac,mp3,ac3,eac3,flac,opus',
+              'AudioCodec': 'aac,mp3,ac3,eac3,flac,opus,ac4',
             },
             // Track playback transcode target: stereo mp3 over plain http.
             // Appended after the video profile so the first-entry-wins
@@ -777,7 +777,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
               'Type': 'Video',
               'Container': 'mp4,mkv,m4v,webm,mov,ts',
               'VideoCodec': 'hevc,h264,h265,vp8,vp9,av1,mpeg4,mpeg2video',
-              'AudioCodec': 'aac,mp3,mp2,ac3,eac3,flac,opus,vorbis,dts',
+              'AudioCodec': 'aac,mp3,mp2,ac3,eac3,flac,opus,vorbis,dts,ac4',
             },
             // Music containers/codecs mpv plays natively everywhere.
             if (audioProfile)
