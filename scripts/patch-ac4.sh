@@ -173,3 +173,22 @@ print('  [✓] Configured libmpv-android $MPV_VERSION ($MPV_SHA256) in build.gra
 fi
 
 echo "==> AC-4 patch application complete."
+
+# 6. Update unit test expectations in plex_playback_data_request_test.dart
+if [ -f "test/services/plex_playback_data_request_test.dart" ]; then
+    python3 -c "
+with open('test/services/plex_playback_data_request_test.dart', 'r') as f:
+    text = f.read()
+
+if \"'&audioCodec=aac%2Cac3%2Ceac3%2Cmp3)',\" in text:
+    text = text.replace(
+        \"'&audioCodec=aac%2Cac3%2Ceac3%2Cmp3)',\",
+        \"'&audioCodec=aac%2Cac3%2Ceac3%2Cmp3%2Cac4)',\"
+    )
+    with open('test/services/plex_playback_data_request_test.dart', 'w') as f:
+        f.write(text)
+    print('  [✓] Updated test expectations in test/services/plex_playback_data_request_test.dart')
+else:
+    print('  [-] test/services/plex_playback_data_request_test.dart already updated')
+"
+fi
