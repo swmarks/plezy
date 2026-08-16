@@ -136,6 +136,7 @@ class CodecUtils {
     return switch (lower) {
       'aac' => 'AAC',
       'ac3' || 'ac-3' => 'AC3',
+      'ac4' => 'AC4',
       'eac3' || 'ec3' || 'ec-3' => 'E-AC3',
       'truehd' || 'mlpa' => 'TrueHD',
       'dts' || 'dca' || 'dtsc' || 'dtse' => 'DTS',
