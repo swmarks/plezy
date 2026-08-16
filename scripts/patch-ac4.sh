@@ -1,0 +1,175 @@
+#!/bin/bash
+set -e
+
+MPV_VERSION="$1"
+MPV_SHA256="$2"
+
+echo "==> Applying AC-4 patches to Plezy codebase..."
+
+# 1. CodecUtils AC-4 display format
+python3 -c "
+with open('lib/utils/codec_utils.dart', 'r') as f:
+    text = f.read()
+
+if \"'ac4' => 'AC4'\" not in text:
+    text = text.replace(
+        \"'ac3' || 'ac-3' => 'AC3',\",
+        \"'ac3' || 'ac-3' => 'AC3',\n      'ac4' => 'AC4',\"
+    )
+    with open('lib/utils/codec_utils.dart', 'w') as f:
+        f.write(text)
+    print('  [✓] Patched lib/utils/codec_utils.dart')
+else:
+    print('  [-] lib/utils/codec_utils.dart already patched')
+"
+
+# 2. Plex Client HLS Transcode Targets
+python3 -c "
+with open('lib/services/plex_client.dart', 'r') as f:
+    text = f.read()
+
+if '%2Cac4' not in text:
+    text = text.replace(
+        '&audioCodec=aac%2Cac3%2Ceac3%2Cmp3)',
+        '&audioCodec=aac%2Cac3%2Ceac3%2Cmp3%2Cac4)'
+    )
+    with open('lib/services/plex_client.dart', 'w') as f:
+        f.write(text)
+    print('  [✓] Patched lib/services/plex_client.dart')
+else:
+    print('  [-] lib/services/plex_client.dart already patched')
+"
+
+# 3. Jellyfin Client Direct Play Profiles
+python3 -c "
+with open('lib/services/jellyfin_client/parts/playback.dart', 'r') as f:
+    text = f.read()
+
+changed = False
+if \"'AudioCodec': 'aac,mp3,ac3,eac3,flac,opus',\" in text:
+    text = text.replace(
+        \"'AudioCodec': 'aac,mp3,ac3,eac3,flac,opus',\",
+        \"'AudioCodec': 'aac,mp3,ac3,eac3,flac,opus,ac4',\"
+    )
+    changed = True
+
+if \"'AudioCodec': 'aac,mp3,mp2,ac3,eac3,flac,opus,vorbis,dts',\" in text:
+    text = text.replace(
+        \"'AudioCodec': 'aac,mp3,mp2,ac3,eac3,flac,opus,vorbis,dts',\",
+        \"'AudioCodec': 'aac,mp3,mp2,ac3,eac3,flac,opus,vorbis,dts,ac4',\"
+    )
+    changed = True
+
+if changed:
+    with open('lib/services/jellyfin_client/parts/playback.dart', 'w') as f:
+        f.write(text)
+    print('  [✓] Patched lib/services/jellyfin_client/parts/playback.dart')
+else:
+    print('  [-] lib/services/jellyfin_client/parts/playback.dart already patched')
+"
+
+# 4. ExoPlayer Audio Fallback to MPV
+python3 -c "
+with open('android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt', 'r') as f:
+    text = f.read()
+
+if 'val hasAnyAudioGroup' not in text:
+    old_block = '''    val hasAnyVideoGroup = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
+    val hasSelectedVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
+    if (!hasAnyVideoGroup || hasSelectedVideo) return
+
+    if (retryWithDvConversion(\"video track not selected\")) return
+    emitLog(\"warn\", \"fallback\", \"Video track present but not selected (unsupported codec)\")
+    requestFormatFallback(
+      mediaGeneration = mediaGeneration,
+      uri = uri,
+      positionMs = effectivePosition,
+      playWhenReady = exoPlayer?.playWhenReady ?: true,
+      errorMessage = \"Video track present but no decoder available\"
+    )'''
+
+    new_block = '''    val hasAnyVideoGroup = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
+    val hasSelectedVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
+    val videoFailed = hasAnyVideoGroup && !hasSelectedVideo
+
+    val hasAnyAudioGroup = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
+    val hasSelectedAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
+    val audioFailed = hasAnyAudioGroup && !hasSelectedAudio
+
+    if (!videoFailed && !audioFailed) return
+
+    if (videoFailed) {
+      if (retryWithDvConversion(\"video track not selected\")) return
+      emitLog(\"warn\", \"fallback\", \"Video track present but not selected (unsupported codec)\")
+      requestFormatFallback(
+        mediaGeneration = mediaGeneration,
+        uri = uri,
+        positionMs = effectivePosition,
+        playWhenReady = exoPlayer?.playWhenReady ?: true,
+        errorMessage = \"Video track present but no decoder available\"
+      )
+    } else if (audioFailed) {
+      emitLog(\"warn\", \"fallback\", \"Audio track present but not selected (unsupported codec)\")
+      requestFormatFallback(
+        mediaGeneration = mediaGeneration,
+        uri = uri,
+        positionMs = effectivePosition,
+        playWhenReady = exoPlayer?.playWhenReady ?: true,
+        errorMessage = \"Audio track present but no decoder available\"
+      )
+    }'''
+
+    text = text.replace(old_block, new_block)
+
+    old_watchdog = '''        if (elapsed >= WATCHDOG_TIMEOUT_MS && player.isPlaying && hasVideoTrack) {'''
+    new_watchdog = '''        // Check if we have an audio track selected
+        val hasAudioTrack = player.currentTracks.groups.any {
+          it.type == C.TRACK_TYPE_AUDIO && it.isSelected
+        }
+        val hasAnyAudioGroup = player.currentTracks.groups.any {
+          it.type == C.TRACK_TYPE_AUDIO
+        }
+
+        if (hasAnyAudioGroup && !hasAudioTrack) {
+          emitLog(\"warn\", \"watchdog\", \"Audio track deselected — triggering fallback\")
+          stopFrameWatchdog()
+          val uri = currentMediaUri ?: return
+          requestFormatFallback(
+            mediaGeneration = mediaGeneration,
+            uri = uri,
+            positionMs = player.currentPosition,
+            playWhenReady = player.playWhenReady,
+            errorMessage = \"Audio track present but no decoder available\"
+          )
+          return
+        }
+
+        if (elapsed >= WATCHDOG_TIMEOUT_MS && player.isPlaying && hasVideoTrack) {'''
+
+    text = text.replace(old_watchdog, new_watchdog)
+
+    with open('android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt', 'w') as f:
+        f.write(text)
+    print('  [✓] Patched android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt')
+else:
+    print('  [-] android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt already patched')
+"
+
+# 5. Update build.gradle.kts with custom libmpv-android
+if [ -n "$MPV_VERSION" ] && [ -n "$MPV_SHA256" ]; then
+    python3 -c "
+import re
+with open('android/app/build.gradle.kts', 'r') as f:
+    text = f.read()
+
+text = re.sub(r'val mpvVersion = \".*?\"', f'val mpvVersion = \"$MPV_VERSION\"', text)
+text = re.sub(r'val mpvSha256 = \".*?\"', f'val mpvSha256 = \"$MPV_SHA256\"', text)
+text = re.sub(r'https://github\.com/edde746/libmpv-android', 'https://github.com/swmarks/libmpv-android', text)
+
+with open('android/app/build.gradle.kts', 'w') as f:
+    f.write(text)
+print('  [✓] Configured libmpv-android $MPV_VERSION ($MPV_SHA256) in build.gradle.kts')
+"
+fi
+
+echo "==> AC-4 patch application complete."
