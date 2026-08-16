@@ -192,3 +192,38 @@ else:
     print('  [-] test/services/plex_playback_data_request_test.dart already updated')
 "
 fi
+
+# 7. Enable AC-4 in Media3 FfmpegLibrary.java
+if [ -f "android/app/src/main/java/androidx/media3/decoder/ffmpeg/FfmpegLibrary.java" ]; then
+    python3 -c "
+with open('android/app/src/main/java/androidx/media3/decoder/ffmpeg/FfmpegLibrary.java', 'r') as f:
+    text = f.read()
+
+if 'case MimeTypes.AUDIO_AC4:' not in text:
+    text = text.replace(
+        'case MimeTypes.AUDIO_E_AC3_JOC:\n        return \"eac3\";',
+        'case MimeTypes.AUDIO_E_AC3_JOC:\n        return \"eac3\";\n      case MimeTypes.AUDIO_AC4:\n        return \"ac4\";'
+    )
+    with open('android/app/src/main/java/androidx/media3/decoder/ffmpeg/FfmpegLibrary.java', 'w') as f:
+        f.write(text)
+    print('  [✓] Enabled AUDIO_AC4 in FfmpegLibrary.java')
+else:
+    print('  [-] FfmpegLibrary.java already has AUDIO_AC4')
+"
+fi
+
+# 8. Ensure valid hwdec value for Android in video_player_screen.dart
+if [ -f "lib/screens/video_player_screen.dart" ]; then
+    python3 -c "
+with open('lib/screens/video_player_screen.dart', 'r') as f:
+    text = f.read()
+
+if \"return 'mediacodec,mediacodec-copy';\" in text:
+    text = text.replace(\"return 'mediacodec,mediacodec-copy';\", \"return 'mediacodec';\")
+    with open('lib/screens/video_player_screen.dart', 'w') as f:
+        f.write(text)
+    print('  [✓] Fixed hwdec in lib/screens/video_player_screen.dart')
+else:
+    print('  [-] lib/screens/video_player_screen.dart already using valid hwdec')
+"
+fi
