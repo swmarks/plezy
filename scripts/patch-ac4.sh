@@ -227,3 +227,22 @@ else:
     print('  [-] lib/screens/video_player_screen.dart already using valid hwdec')
 "
 fi
+
+# 9. Configure MpvPlayerCore initialize options for hardware decoding
+if [ -f "android/app/src/main/kotlin/com/edde746/plezy/mpv/MpvPlayerCore.kt" ]; then
+    python3 -c "
+with open('android/app/src/main/kotlin/com/edde746/plezy/mpv/MpvPlayerCore.kt', 'r') as f:
+    text = f.read()
+
+if 'setOption(\"hwdec\", \"auto-safe\")' not in text:
+    text = text.replace(
+        'setOption(\"vd-lavc-film-grain\", \"cpu\")',
+        'setOption(\"vd-lavc-film-grain\", \"cpu\")\n              setOption(\"hwdec\", \"auto-safe\")\n              setOption(\"hwdec-codecs\", \"all\")'
+    )
+    with open('android/app/src/main/kotlin/com/edde746/plezy/mpv/MpvPlayerCore.kt', 'w') as f:
+        f.write(text)
+    print('  [✓] Configured hwdec options in MpvPlayerCore.kt')
+else:
+    print('  [-] MpvPlayerCore.kt already has hwdec options')
+"
+fi
