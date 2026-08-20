@@ -2833,17 +2833,34 @@ class ExoPlayerCore(private val activity: Activity) :
     val uri = currentMediaUri ?: return
     val hasAnyVideoGroup = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
     val hasSelectedVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
-    if (!hasAnyVideoGroup || hasSelectedVideo) return
+    val videoFailed = hasAnyVideoGroup && !hasSelectedVideo
 
-    if (retryWithDvConversion("video track not selected")) return
-    emitLog("warn", "fallback", "Video track present but not selected (unsupported codec)")
-    requestFormatFallback(
-      mediaGeneration = mediaGeneration,
-      uri = uri,
-      positionMs = effectivePosition,
-      playWhenReady = exoPlayer?.playWhenReady ?: true,
-      errorMessage = "Video track present but no decoder available"
-    )
+    val hasAnyAudioGroup = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
+    val hasSelectedAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
+    val audioFailed = hasAnyAudioGroup && !hasSelectedAudio
+
+    if (!videoFailed && !audioFailed) return
+
+    if (videoFailed) {
+      if (retryWithDvConversion("video track not selected")) return
+      emitLog("warn", "fallback", "Video track present but not selected (unsupported codec)")
+      requestFormatFallback(
+        mediaGeneration = mediaGeneration,
+        uri = uri,
+        positionMs = effectivePosition,
+        playWhenReady = exoPlayer?.playWhenReady ?: true,
+        errorMessage = "Video track present but no decoder available"
+      )
+    } else if (audioFailed) {
+      emitLog("warn", "fallback", "Audio track present but not selected (unsupported codec)")
+      requestFormatFallback(
+        mediaGeneration = mediaGeneration,
+        uri = uri,
+        positionMs = effectivePosition,
+        playWhenReady = exoPlayer?.playWhenReady ?: true,
+        errorMessage = "Audio track present but no decoder available"
+      )
+    }
   }
 
   private fun claimPlaybackOutputReady(): Boolean {
@@ -3118,6 +3135,28 @@ class ExoPlayerCore(private val activity: Activity) :
             positionMs = player.currentPosition,
             playWhenReady = player.playWhenReady,
             errorMessage = "Video track present but no decoder available"
+          )
+          return
+        }
+
+        // Check if we have an audio track selected
+        val hasAudioTrack = player.currentTracks.groups.any {
+          it.type == C.TRACK_TYPE_AUDIO && it.isSelected
+        }
+        val hasAnyAudioGroup = player.currentTracks.groups.any {
+          it.type == C.TRACK_TYPE_AUDIO
+        }
+
+        if (hasAnyAudioGroup && !hasAudioTrack) {
+          emitLog("warn", "watchdog", "Audio track deselected — triggering fallback")
+          stopFrameWatchdog()
+          val uri = currentMediaUri ?: return
+          requestFormatFallback(
+            mediaGeneration = mediaGeneration,
+            uri = uri,
+            positionMs = player.currentPosition,
+            playWhenReady = player.playWhenReady,
+            errorMessage = "Audio track present but no decoder available"
           )
           return
         }

@@ -1,0 +1,165 @@
+name: Sync Upstream & Release Android
+
+on:
+  schedule:
+    - cron: '0 4 * * *' # Run daily at 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: "Force rebuild even if no upstream changes detected"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  check-and-sync:
+    name: Check Upstream & Sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check Upstream Status & Dependencies
+        id: check_status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_REBUILD: ${{ inputs.force_rebuild }}
+        run: |
+          echo "=========================================="
+          echo "Checking Upstream Repositories"
+          echo "=========================================="
+
+          # 1. Query Upstream Plezy Release
+          PLEZY_UPSTREAM_TAG=$(gh api repos/edde746/plezy/releases/latest --jq '.tag_name')
+          echo "Latest upstream Plezy release: $PLEZY_UPSTREAM_TAG"
+
+          # 2. Query Current Plezy Version in Fork
+          CURRENT_VERSION=$(grep '^version:' pubspec.yaml | head -n1 | awk '{print $2}' | cut -d'+' -f1)
+          echo "Current Plezy version in fork: $CURRENT_VERSION"
+
+          # 3. Query libmpv-android Upstream and Fork Releases
+          MPV_UPSTREAM_COMMIT=$(gh api repos/edde746/libmpv-android/commits/main --jq '.sha')
+          MPV_LATEST_RELEASE=$(gh api repos/swmarks/libmpv-android/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+          echo "Latest upstream libmpv-android commit: ${MPV_UPSTREAM_COMMIT:0:7}"
+          echo "Latest swmarks/libmpv-android release: $MPV_LATEST_RELEASE"
+
+          # 4. Check if libmpv-android needs rebuild
+          REBUILD_MPV=false
+          if [ -z "$MPV_LATEST_RELEASE" ]; then
+            REBUILD_MPV=true
+          fi
+
+          if [ "$REBUILD_MPV" = "true" ]; then
+            echo "Triggering rebuild of libmpv-android..."
+            MPV_NEW_TAG="v1.0.7-ac4.$(date +%s)"
+            gh workflow run build.yaml --repo swmarks/libmpv-android -f release_tag="$MPV_NEW_TAG"
+            
+            echo "Waiting for libmpv-android build to complete..."
+            sleep 60
+            while true; do
+              RUN_STATUS=$(gh run list --repo swmarks/libmpv-android --limit 1 --json status,conclusion --jq '.[0]')
+              STATUS=$(echo "$RUN_STATUS" | jq -r '.status')
+              CONCLUSION=$(echo "$RUN_STATUS" | jq -r '.conclusion')
+              if [ "$STATUS" = "completed" ]; then
+                if [ "$CONCLUSION" = "success" ]; then
+                  echo "libmpv-android build succeeded!"
+                  MPV_LATEST_RELEASE="$MPV_NEW_TAG"
+                  break
+                else
+                  echo "libmpv-android build failed ($CONCLUSION)!"
+                  exit 1
+                fi
+              fi
+              echo "Build in progress... waiting 30s"
+              sleep 30
+            done
+          fi
+
+          # 5. Fetch AAR & compute SHA256
+          echo "Downloading AAR for $MPV_LATEST_RELEASE..."
+          gh release download "$MPV_LATEST_RELEASE" --repo swmarks/libmpv-android --pattern "libmpv-release.aar" --output /tmp/libmpv-release.aar --clobber
+          MPV_SHA256=$(sha256sum /tmp/libmpv-release.aar | awk '{print $1}')
+          echo "Using libmpv-android: $MPV_LATEST_RELEASE ($MPV_SHA256)"
+
+          # 6. Check if Plezy needs update
+          PLEZY_CLEAN_TAG="${PLEZY_UPSTREAM_TAG#v}"
+          NEEDS_PLEZY_UPDATE=false
+          if [ "$FORCE_REBUILD" = "true" ] || [ "$PLEZY_CLEAN_TAG" != "$CURRENT_VERSION" ] || [ "$REBUILD_MPV" = "true" ]; then
+            NEEDS_PLEZY_UPDATE=true
+          fi
+
+          echo "needs_update=$NEEDS_PLEZY_UPDATE" >> $GITHUB_OUTPUT
+          echo "plezy_tag=$PLEZY_UPSTREAM_TAG" >> $GITHUB_OUTPUT
+          echo "mpv_version=$MPV_LATEST_RELEASE" >> $GITHUB_OUTPUT
+          echo "mpv_sha256=$MPV_SHA256" >> $GITHUB_OUTPUT
+
+      - name: Rebase & Apply AC-4 Patches
+        if: steps.check_status.outputs.needs_update == 'true'
+        env:
+          PLEZY_TAG: ${{ steps.check_status.outputs.plezy_tag }}
+          MPV_VERSION: ${{ steps.check_status.outputs.mpv_version }}
+          MPV_SHA256: ${{ steps.check_status.outputs.mpv_sha256 }}
+        run: |
+          echo "=========================================="
+          echo "Syncing Plezy with Upstream $PLEZY_TAG"
+          echo "=========================================="
+
+          # 1. Back up our automation scripts and custom workflows before resetting
+          mkdir -p /tmp/plezy_sync_backup
+          cp scripts/patch-ac4.sh /tmp/plezy_sync_backup/patch-ac4.sh
+          cp -r .github/workflows /tmp/plezy_sync_backup/workflows
+
+          # 2. Fetch upstream release
+          git remote add upstream https://github.com/edde746/plezy.git 2>/dev/null || git remote set-url upstream https://github.com/edde746/plezy.git
+          git fetch upstream --tags
+
+          # 3. Reset repository to upstream release tag
+          git reset --hard "$PLEZY_TAG"
+
+          # 4. Restore custom scripts and workflows
+          mkdir -p scripts .github/workflows
+          cp /tmp/plezy_sync_backup/patch-ac4.sh scripts/patch-ac4.sh
+          chmod +x scripts/patch-ac4.sh
+          cp -r /tmp/plezy_sync_backup/workflows/* .github/workflows/
+
+          # 5. Apply idempotent AC-4 patches
+          ./scripts/patch-ac4.sh "$MPV_VERSION" "$MPV_SHA256"
+
+          # 6. Commit changes
+          git add -A
+          VERSION=$(grep '^version:' pubspec.yaml | head -n1 | awk '{print $2}' | cut -d'+' -f1)
+          RELEASE_TAG="v${VERSION}-ac4.1"
+
+          if ! git diff --cached --quiet; then
+            git commit -m "feat(ac4): update to ${VERSION} and configure AC-4 audio support"
+            git push origin main --force
+            echo "Pushed updated main branch."
+          fi
+
+          # 7. Create release tag and push (triggers build-android.yml)
+          git tag -f "$RELEASE_TAG"
+          git push origin "$RELEASE_TAG" --force
+          echo "Pushed release tag $RELEASE_TAG"
+
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_ENV
+
+      - name: Trigger Android Release Build
+        if: steps.check_status.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ env.release_tag }}
+        run: |
+          echo "Triggering Android release build for $TAG..."
+          gh workflow run build-android.yml --repo swmarks/plezy -f release_tag="$TAG" || echo "Release build already triggered via tag push"
