@@ -119,7 +119,8 @@ jobs:
           # 1. Back up our automation scripts and custom workflows before resetting
           mkdir -p /tmp/plezy_sync_backup
           cp scripts/patch-ac4.sh /tmp/plezy_sync_backup/patch-ac4.sh
-          cp -r .github/workflows /tmp/plezy_sync_backup/workflows
+          cp .github/workflows/build-android.yml /tmp/plezy_sync_backup/build-android.yml
+          cp .github/workflows/sync-upstream.yml /tmp/plezy_sync_backup/sync-upstream.yml
 
           # 2. Fetch upstream release
           git remote add upstream https://github.com/edde746/plezy.git 2>/dev/null || git remote set-url upstream https://github.com/edde746/plezy.git
@@ -132,7 +133,8 @@ jobs:
           mkdir -p scripts .github/workflows
           cp /tmp/plezy_sync_backup/patch-ac4.sh scripts/patch-ac4.sh
           chmod +x scripts/patch-ac4.sh
-          cp -r /tmp/plezy_sync_backup/workflows/* .github/workflows/
+          cp /tmp/plezy_sync_backup/build-android.yml .github/workflows/build-android.yml
+          cp /tmp/plezy_sync_backup/sync-upstream.yml .github/workflows/sync-upstream.yml
 
           # 5. Apply idempotent AC-4 patches
           ./scripts/patch-ac4.sh "$MPV_VERSION" "$MPV_SHA256"
