@@ -2900,8 +2900,8 @@ class ExoPlayerCore(private val activity: Activity) :
     val videoFailed = hasAnyVideoGroup && !hasSelectedVideo
 
     val hasAnyAudioGroup = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
-    val hasSelectedAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
-    val audioFailed = hasAnyAudioGroup && !hasSelectedAudio
+    val hasSupportedAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO && (it.isSelected || it.isSupported) }
+    val audioFailed = hasAnyAudioGroup && !hasSupportedAudio
 
     if (!videoFailed && !audioFailed) return
 
@@ -3205,7 +3205,7 @@ class ExoPlayerCore(private val activity: Activity) :
 
         // Check if we have an audio track selected
         val hasAudioTrack = player.currentTracks.groups.any {
-          it.type == C.TRACK_TYPE_AUDIO && it.isSelected
+          it.type == C.TRACK_TYPE_AUDIO && (it.isSelected || it.isSupported)
         }
         val hasAnyAudioGroup = player.currentTracks.groups.any {
           it.type == C.TRACK_TYPE_AUDIO

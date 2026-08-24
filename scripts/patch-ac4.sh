@@ -68,85 +68,44 @@ else:
     print('  [-] lib/services/jellyfin_client/parts/playback.dart already patched')
 "
 
-# 4. ExoPlayer Audio Fallback to MPV
+# 4. ExoPlayer Audio Fallback to MPV (Robust to transient track evaluation)
 python3 -c "
 with open('android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt', 'r') as f:
     text = f.read()
 
-if 'val hasAnyAudioGroup' not in text:
-    old_block = '''    val hasAnyVideoGroup = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
+if 'val hasSupportedAudio' not in text:
+    # Replace existing fallback logic if present
+    if 'val hasAnyAudioGroup' in text:
+        old_block = '''    val hasAnyVideoGroup = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
     val hasSelectedVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
-    if (!hasAnyVideoGroup || hasSelectedVideo) return
+    val videoFailed = hasAnyVideoGroup && !hasSelectedVideo
 
-    if (retryWithDvConversion(\"video track not selected\")) return
-    emitLog(\"warn\", \"fallback\", \"Video track present but not selected (unsupported codec)\")
-    requestFormatFallback(
-      mediaGeneration = mediaGeneration,
-      uri = uri,
-      positionMs = effectivePosition,
-      playWhenReady = exoPlayer?.playWhenReady ?: true,
-      errorMessage = \"Video track present but no decoder available\"
-    )'''
+    val hasAnyAudioGroup = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
+    val hasSelectedAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
+    val audioFailed = hasAnyAudioGroup && !hasSelectedAudio'''
+    else:
+        old_block = '''    val hasAnyVideoGroup = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
+    val hasSelectedVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
+    val videoFailed = hasAnyVideoGroup && !hasSelectedVideo'''
 
     new_block = '''    val hasAnyVideoGroup = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
     val hasSelectedVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
     val videoFailed = hasAnyVideoGroup && !hasSelectedVideo
 
     val hasAnyAudioGroup = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
-    val hasSelectedAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
-    val audioFailed = hasAnyAudioGroup && !hasSelectedAudio
-
-    if (!videoFailed && !audioFailed) return
-
-    if (videoFailed) {
-      if (retryWithDvConversion(\"video track not selected\")) return
-      emitLog(\"warn\", \"fallback\", \"Video track present but not selected (unsupported codec)\")
-      requestFormatFallback(
-        mediaGeneration = mediaGeneration,
-        uri = uri,
-        positionMs = effectivePosition,
-        playWhenReady = exoPlayer?.playWhenReady ?: true,
-        errorMessage = \"Video track present but no decoder available\"
-      )
-    } else if (audioFailed) {
-      emitLog(\"warn\", \"fallback\", \"Audio track present but not selected (unsupported codec)\")
-      requestFormatFallback(
-        mediaGeneration = mediaGeneration,
-        uri = uri,
-        positionMs = effectivePosition,
-        playWhenReady = exoPlayer?.playWhenReady ?: true,
-        errorMessage = \"Audio track present but no decoder available\"
-      )
-    }'''
+    val hasSupportedAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO && (it.isSelected || it.isSupported) }
+    val audioFailed = hasAnyAudioGroup && !hasSupportedAudio'''
 
     text = text.replace(old_block, new_block)
 
-    old_watchdog = '''        if (elapsed >= WATCHDOG_TIMEOUT_MS && player.isPlaying && hasVideoTrack) {'''
-    new_watchdog = '''        // Check if we have an audio track selected
-        val hasAudioTrack = player.currentTracks.groups.any {
+    if 'val hasAudioTrack = player.currentTracks.groups.any' in text:
+        old_watchdog = '''        val hasAudioTrack = player.currentTracks.groups.any {
           it.type == C.TRACK_TYPE_AUDIO && it.isSelected
-        }
-        val hasAnyAudioGroup = player.currentTracks.groups.any {
-          it.type == C.TRACK_TYPE_AUDIO
-        }
-
-        if (hasAnyAudioGroup && !hasAudioTrack) {
-          emitLog(\"warn\", \"watchdog\", \"Audio track deselected — triggering fallback\")
-          stopFrameWatchdog()
-          val uri = currentMediaUri ?: return
-          requestFormatFallback(
-            mediaGeneration = mediaGeneration,
-            uri = uri,
-            positionMs = player.currentPosition,
-            playWhenReady = player.playWhenReady,
-            errorMessage = \"Audio track present but no decoder available\"
-          )
-          return
-        }
-
-        if (elapsed >= WATCHDOG_TIMEOUT_MS && player.isPlaying && hasVideoTrack) {'''
-
-    text = text.replace(old_watchdog, new_watchdog)
+        }'''
+        new_watchdog = '''        val hasAudioTrack = player.currentTracks.groups.any {
+          it.type == C.TRACK_TYPE_AUDIO && (it.isSelected || it.isSupported)
+        }'''
+        text = text.replace(old_watchdog, new_watchdog)
 
     with open('android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt', 'w') as f:
         f.write(text)
@@ -261,6 +220,60 @@ if 'case AV_CODEC_ID_AC4:' not in text:
     print('  [✓] Enabled AV_CODEC_ID_AC4 in ffmpeg_demuxer_jni.cc')
 else:
     print('  [-] ffmpeg_demuxer_jni.cc already has AV_CODEC_ID_AC4')
+"
+fi
+
+# 11. Fix FfmpegAudioRenderer sink support for streams with uninitialized channelCount or sampleRate
+if [ -f "android/app/src/main/java/androidx/media3/decoder/ffmpeg/FfmpegAudioRenderer.java" ]; then
+    python3 -c "
+with open('android/app/src/main/java/androidx/media3/decoder/ffmpeg/FfmpegAudioRenderer.java', 'r') as f:
+    text = f.read()
+
+old_sink_method = '''  private boolean sinkSupportsFormat(Format inputFormat, @C.PcmEncoding int pcmEncoding) {
+    return sinkSupportsFormat(
+        Util.getPcmFormat(pcmEncoding, inputFormat.channelCount, inputFormat.sampleRate));
+  }'''
+
+new_sink_method = '''  private boolean sinkSupportsFormat(Format inputFormat, @C.PcmEncoding int pcmEncoding) {
+    int channelCount = inputFormat.channelCount != Format.NO_VALUE ? inputFormat.channelCount : 2;
+    int sampleRate = inputFormat.sampleRate != Format.NO_VALUE ? inputFormat.sampleRate : 48000;
+    return sinkSupportsFormat(
+        Util.getPcmFormat(pcmEncoding, channelCount, sampleRate));
+  }'''
+
+if old_sink_method in text:
+    text = text.replace(old_sink_method, new_sink_method)
+
+old_float_method = '''  private boolean shouldOutputFloat(Format inputFormat) {
+    if (!sinkSupportsFormat(inputFormat, C.ENCODING_PCM_16BIT)) {
+      return true;
+    }
+
+    @SinkFormatSupport
+    int formatSupport =
+        getSinkFormatSupport(
+            Util.getPcmFormat(
+                C.ENCODING_PCM_FLOAT, inputFormat.channelCount, inputFormat.sampleRate));'''
+
+new_float_method = '''  private boolean shouldOutputFloat(Format inputFormat) {
+    if (!sinkSupportsFormat(inputFormat, C.ENCODING_PCM_16BIT)) {
+      return true;
+    }
+
+    int channelCount = inputFormat.channelCount != Format.NO_VALUE ? inputFormat.channelCount : 2;
+    int sampleRate = inputFormat.sampleRate != Format.NO_VALUE ? inputFormat.sampleRate : 48000;
+    @SinkFormatSupport
+    int formatSupport =
+        getSinkFormatSupport(
+            Util.getPcmFormat(
+                C.ENCODING_PCM_FLOAT, channelCount, sampleRate));'''
+
+if old_float_method in text:
+    text = text.replace(old_float_method, new_float_method)
+
+with open('android/app/src/main/java/androidx/media3/decoder/ffmpeg/FfmpegAudioRenderer.java', 'w') as f:
+    f.write(text)
+print('  [✓] Configured channel/rate fallback in FfmpegAudioRenderer.java')
 "
 fi
 
