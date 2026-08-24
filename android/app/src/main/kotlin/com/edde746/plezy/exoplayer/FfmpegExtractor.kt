@@ -458,6 +458,7 @@ internal class FfmpegExtractor private constructor(
 
   private fun readPacket(input: ExtractorInput, seekPosition: PositionHolder): Int {
     var reconciles = 0
+    var debugPacketCount = 0
     while (true) {
       val code = FfmpegDemuxerJni.nativeReadPacket(packetBytes, packetOut)
       when (code) {
@@ -468,6 +469,13 @@ internal class FfmpegExtractor private constructor(
           val ptsUs = packetOut[FfmpegDemuxerJni.OUT_PTS_US]
           val isAudio = audioStreamIndices.getOrNull(streamIndex) == true
           val isKeyframe = isAudio || (packetOut[FfmpegDemuxerJni.OUT_FLAGS] and 1L != 0L)
+          // DEBUG: log first 100 packets to diagnose decoder starvation
+          if (debugPacketCount < 100) {
+            val typeLabel = if (isAudio) "AUD" else "VID"
+            val hexPrefix = if (size >= 4) String.format("%02x%02x%02x%02x", packetBytes[0].toInt() and 0xFF, packetBytes[1].toInt() and 0xFF, packetBytes[2].toInt() and 0xFF, packetBytes[3].toInt() and 0xFF) else "??"
+            Log.i(TAG, "PKT#$debugPacketCount $typeLabel stream=$streamIndex size=$size pts=${ptsUs/1000}ms key=$isKeyframe rawFlag=${packetOut[FfmpegDemuxerJni.OUT_FLAGS]} head=$hexPrefix")
+            debugPacketCount++
+          }
           val subtitleKind = subtitleKinds.getOrNull(streamIndex) ?: SubtitleKind.NONE
           if (subtitleKind != SubtitleKind.NONE) {
             // Text samples carry their duration inside the sample text, in
