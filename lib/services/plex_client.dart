@@ -101,7 +101,7 @@ const _plexVideoHlsProtocol = 'hls';
 const _plexHlsVodVideoTranscodeTarget =
     'add-transcode-target(type=videoProfile&context=streaming'
     '&protocol=hls&container=mp4&videoCodec=h264%2Chevc'
-    '&audioCodec=aac%2Cac3%2Ceac3%2Cmp3)';
+    '&audioCodec=aac%2Cac3%2Ceac3%2Cmp3%2Cac4)';
 
 /// Fallback VOD target for a server whose decision does not honour the fMP4
 /// container: H.264-only MPEG-TS, the combination Plex's own legacy clients
@@ -110,7 +110,7 @@ const _plexHlsVodVideoTranscodeTarget =
 const _plexHlsVodTsVideoTranscodeTarget =
     'add-transcode-target(type=videoProfile&context=streaming'
     '&protocol=hls&container=mpegts&videoCodec=h264'
-    '&audioCodec=aac%2Cac3%2Ceac3%2Cmp3)';
+    '&audioCodec=aac%2Cac3%2Ceac3%2Cmp3%2Cac4)';
 
 /// Live TV target: MPEG-TS with the broadcast codecs. Live sessions are
 /// copy-dominant (TS→TS remux — hevc/mpeg2video here are copy targets, and
@@ -120,7 +120,7 @@ const _plexHlsVodTsVideoTranscodeTarget =
 const _plexHlsLiveVideoTranscodeTarget =
     'add-transcode-target(type=videoProfile&context=streaming'
     '&protocol=hls&container=mpegts&videoCodec=h264%2Chevc%2Cmpeg2video'
-    '&audioCodec=aac%2Cac3%2Ceac3%2Cmp3)';
+    '&audioCodec=aac%2Cac3%2Ceac3%2Cmp3%2Cac4)';
 
 const _plexHlsSubtitleTranscodeTarget =
     'add-transcode-target(type=subtitleProfile&context=streaming'
