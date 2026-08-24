@@ -116,9 +116,7 @@ final class FfmpegAudioDecoder
     int result =
         ffmpegDecode(
             nativeContext, inputData, inputSize, outputBuffer, outputData, outputBufferSize);
-    if (result == AUDIO_DECODER_ERROR_OTHER) {
-      return new FfmpegDecoderException("Error decoding (see logcat).");
-    } else if (result == AUDIO_DECODER_ERROR_INVALID_DATA) {
+    if (result == AUDIO_DECODER_ERROR_OTHER || result == AUDIO_DECODER_ERROR_INVALID_DATA) {
       outputBuffer.shouldBeSkipped = true;
       return null;
     } else if (result == 0) {

@@ -277,4 +277,60 @@ print('  [✓] Configured channel/rate fallback in FfmpegAudioRenderer.java')
 "
 fi
 
+# 12. Recreate AC-4 decoder context on seek and make packet errors non-fatal
+if [ -f "android/app/src/main/cpp/media3_ffmpeg_decoder/ffmpeg_jni.cc" ]; then
+    python3 -c "
+with open('android/app/src/main/cpp/media3_ffmpeg_decoder/ffmpeg_jni.cc', 'r') as f:
+    text = f.read()
+
+if 'codecId == AV_CODEC_ID_AC4' not in text:
+    text = text.replace(
+        'if (codecId == AV_CODEC_ID_TRUEHD) {',
+        'if (codecId == AV_CODEC_ID_TRUEHD || codecId == AV_CODEC_ID_AC4) {'
+    )
+
+old_transform = '''static int transformError(int errorNumber) {
+  return errorNumber == AVERROR_INVALIDDATA ? AUDIO_DECODER_ERROR_INVALID_DATA : AUDIO_DECODER_ERROR_OTHER;
+}'''
+
+new_transform = '''static int transformError(int errorNumber) {
+  // Treat all packet decode errors as non-fatal skipped buffers so seek/packet glitches do not kill playback
+  return AUDIO_DECODER_ERROR_INVALID_DATA;
+}'''
+
+if old_transform in text:
+    text = text.replace(old_transform, new_transform)
+
+with open('android/app/src/main/cpp/media3_ffmpeg_decoder/ffmpeg_jni.cc', 'w') as f:
+    f.write(text)
+print('  [✓] Enhanced AC-4 seek recovery and non-fatal error handling in ffmpeg_jni.cc')
+"
+fi
+
+# 13. Skip non-fatal decode errors in FfmpegAudioDecoder.java
+if [ -f "android/app/src/main/java/androidx/media3/decoder/ffmpeg/FfmpegAudioDecoder.java" ]; then
+    python3 -c "
+with open('android/app/src/main/java/androidx/media3/decoder/ffmpeg/FfmpegAudioDecoder.java', 'r') as f:
+    text = f.read()
+
+old_error_handling = '''    if (result == AUDIO_DECODER_ERROR_OTHER) {
+      return new FfmpegDecoderException(\"Error decoding (see logcat).\");
+    } else if (result == AUDIO_DECODER_ERROR_INVALID_DATA) {
+      outputBuffer.shouldBeSkipped = true;
+      return null;
+    }'''
+
+new_error_handling = '''    if (result == AUDIO_DECODER_ERROR_OTHER || result == AUDIO_DECODER_ERROR_INVALID_DATA) {
+      outputBuffer.shouldBeSkipped = true;
+      return null;
+    }'''
+
+if old_error_handling in text:
+    text = text.replace(old_error_handling, new_error_handling)
+    with open('android/app/src/main/java/androidx/media3/decoder/ffmpeg/FfmpegAudioDecoder.java', 'w') as f:
+        f.write(text)
+    print('  [✓] Made decode errors non-fatal in FfmpegAudioDecoder.java')
+"
+fi
+
 echo "==> AC-4 patch application complete."
