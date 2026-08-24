@@ -68,13 +68,12 @@ else:
     print('  [-] lib/services/jellyfin_client/parts/playback.dart already patched')
 "
 
-# 4. ExoPlayer Audio Fallback to MPV (Robust to transient track evaluation)
+# 4. ExoPlayer Audio Fallback to MPV (Robust to transient track evaluation) & Subtitle Codec Reporting
 python3 -c "
 with open('android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt', 'r') as f:
     text = f.read()
 
 if 'val hasSupportedAudio' not in text:
-    # Replace existing fallback logic if present
     if 'val hasAnyAudioGroup' in text:
         old_block = '''    val hasAnyVideoGroup = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
     val hasSelectedVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
@@ -98,20 +97,32 @@ if 'val hasSupportedAudio' not in text:
 
     text = text.replace(old_block, new_block)
 
-    if 'val hasAudioTrack = player.currentTracks.groups.any' in text:
-        old_watchdog = '''        val hasAudioTrack = player.currentTracks.groups.any {
+if 'val hasAudioTrack = player.currentTracks.groups.any' in text:
+    old_watchdog = '''        val hasAudioTrack = player.currentTracks.groups.any {
           it.type == C.TRACK_TYPE_AUDIO && it.isSelected
         }'''
-        new_watchdog = '''        val hasAudioTrack = player.currentTracks.groups.any {
+    new_watchdog = '''        val hasAudioTrack = player.currentTracks.groups.any {
           it.type == C.TRACK_TYPE_AUDIO && (it.isSelected || it.isSupported)
         }'''
-        text = text.replace(old_watchdog, new_watchdog)
+    text = text.replace(old_watchdog, new_watchdog)
 
-    with open('android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt', 'w') as f:
-        f.write(text)
-    print('  [✓] Patched android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt')
-else:
-    print('  [-] android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt already patched')
+old_sub_codec = '\"codec\" to format.codecs,'
+new_sub_codec = '''\"codec\" to (format.codecs ?: when (format.sampleMimeType) {
+          \"application/x-quicktime-tx3g\", \"application/x-mp4-cea-608\" -> \"mov_text\"
+          \"application/x-subrip\" -> \"subrip\"
+          \"text/x-ssa\" -> \"ass\"
+          \"text/vtt\" -> \"vtt\"
+          \"application/pgs\" -> \"pgs\"
+          \"application/vobsub\" -> \"vobsub\"
+          else -> format.sampleMimeType?.substringAfterLast('/')
+        }),'''
+
+if old_sub_codec in text:
+    text = text.replace(old_sub_codec, new_sub_codec)
+
+with open('android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt', 'w') as f:
+    f.write(text)
+print('  [✓] Patched android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt')
 "
 
 # 5. Update build.gradle.kts with custom libmpv-android
@@ -204,7 +215,7 @@ else:
 "
 fi
 
-# 10. Enable AC-4 audio MIME in FFmpeg demuxer JNI (Plezy 2.17.0+)
+# 10. Enable AC-4 audio and mov_text subtitle MIME in FFmpeg demuxer JNI (Plezy 2.17.0+)
 if [ -f "android/app/src/main/cpp/media3_ffmpeg_demuxer/ffmpeg_demuxer_jni.cc" ]; then
     python3 -c "
 with open('android/app/src/main/cpp/media3_ffmpeg_demuxer/ffmpeg_demuxer_jni.cc', 'r') as f:
@@ -215,11 +226,16 @@ if 'case AV_CODEC_ID_AC4:' not in text:
         'case AV_CODEC_ID_EAC3:\n      return \"audio/eac3\";',
         'case AV_CODEC_ID_EAC3:\n      return \"audio/eac3\";\n    case AV_CODEC_ID_AC4:\n      return \"audio/ac4\";'
     )
-    with open('android/app/src/main/cpp/media3_ffmpeg_demuxer/ffmpeg_demuxer_jni.cc', 'w') as f:
-        f.write(text)
-    print('  [✓] Enabled AV_CODEC_ID_AC4 in ffmpeg_demuxer_jni.cc')
-else:
-    print('  [-] ffmpeg_demuxer_jni.cc already has AV_CODEC_ID_AC4')
+
+if 'case AV_CODEC_ID_MOV_TEXT:' not in text:
+    text = text.replace(
+        'case AV_CODEC_ID_DVD_SUBTITLE:\n      return \"application/vobsub\";',
+        'case AV_CODEC_ID_DVD_SUBTITLE:\n      return \"application/vobsub\";\n    case AV_CODEC_ID_MOV_TEXT:\n      return \"application/x-quicktime-tx3g\";'
+    )
+
+with open('android/app/src/main/cpp/media3_ffmpeg_demuxer/ffmpeg_demuxer_jni.cc', 'w') as f:
+    f.write(text)
+print('  [✓] Enabled AV_CODEC_ID_AC4 and AV_CODEC_ID_MOV_TEXT in ffmpeg_demuxer_jni.cc')
 "
 fi
 
@@ -330,6 +346,45 @@ if old_error_handling in text:
     with open('android/app/src/main/java/androidx/media3/decoder/ffmpeg/FfmpegAudioDecoder.java', 'w') as f:
         f.write(text)
     print('  [✓] Made decode errors non-fatal in FfmpegAudioDecoder.java')
+"
+fi
+
+# 14. Ensure all audio packets in FfmpegExtractor are flagged as KEY_FRAME for reliable seeking and startup
+if [ -f "android/app/src/main/kotlin/com/edde746/plezy/exoplayer/FfmpegExtractor.kt" ]; then
+    python3 -c "
+with open('android/app/src/main/kotlin/com/edde746/plezy/exoplayer/FfmpegExtractor.kt', 'r') as f:
+    text = f.read()
+
+if 'private var audioStreamIndices: BooleanArray' not in text:
+    text = text.replace(
+        'private var primaryStreamIsAudio = false',
+        'private var primaryStreamIsAudio = false\n  private var audioStreamIndices: BooleanArray = BooleanArray(0)'
+    )
+
+if 'audioStreamIndices = BooleanArray(count)' not in text:
+    text = text.replace(
+        'val count = FfmpegDemuxerJni.nativeStreamCount()',
+        'val count = FfmpegDemuxerJni.nativeStreamCount()\n    val audioFlags = BooleanArray(count)'
+    )
+    text = text.replace(
+        'if (primaryAudio < 0) primaryAudio = index\n          bitrateMeters[index] = StreamBitrateMeter()',
+        'if (primaryAudio < 0) primaryAudio = index\n          bitrateMeters[index] = StreamBitrateMeter()\n          audioFlags[index] = true'
+    )
+    text = text.replace(
+        'primaryStreamIndex = if (primaryVideo >= 0) primaryVideo else primaryAudio',
+        'audioStreamIndices = audioFlags\n    primaryStreamIndex = if (primaryVideo >= 0) primaryVideo else primaryAudio'
+    )
+
+old_keyframe_line = '''          val isKeyframe = packetOut[FfmpegDemuxerJni.OUT_FLAGS] and 1L != 0L'''
+new_keyframe_line = '''          val isAudio = audioStreamIndices.getOrNull(streamIndex) == true
+          val isKeyframe = isAudio || (packetOut[FfmpegDemuxerJni.OUT_FLAGS] and 1L != 0L)'''
+
+if old_keyframe_line in text:
+    text = text.replace(old_keyframe_line, new_keyframe_line)
+
+with open('android/app/src/main/kotlin/com/edde746/plezy/exoplayer/FfmpegExtractor.kt', 'w') as f:
+    f.write(text)
+print('  [✓] Configured audio keyframe flags in FfmpegExtractor.kt')
 "
 fi
 

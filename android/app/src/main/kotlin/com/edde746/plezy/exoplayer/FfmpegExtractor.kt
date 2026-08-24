@@ -109,6 +109,7 @@ internal class FfmpegExtractor private constructor(
   private var trackOutputs: Array<TrackOutput?> = emptyArray()
   private var primaryStreamIndex = -1
   private var primaryStreamIsAudio = false
+  private var audioStreamIndices: BooleanArray = BooleanArray(0)
   private var packetBytes = ByteArray(INITIAL_PACKET_BUFFER_BYTES)
   private val packetParsable = ParsableByteArray()
   private val packetOut = LongArray(FfmpegDemuxerJni.OUT_LENGTH)
@@ -302,6 +303,7 @@ internal class FfmpegExtractor private constructor(
 
   private fun prepareTracks() {
     val count = FfmpegDemuxerJni.nativeStreamCount()
+    val audioFlags = BooleanArray(count)
     durationUs = FfmpegDemuxerJni.nativeDurationUs().takeIf { it >= 0 } ?: C.TIME_UNSET
     trackOutputs = arrayOfNulls(count)
     subtitleKinds = Array(count) { SubtitleKind.NONE }
@@ -381,6 +383,7 @@ internal class FfmpegExtractor private constructor(
           if (pcmEncoding >= 0) builder.setPcmEncoding(pcmEncoding)
           if (primaryAudio < 0) primaryAudio = index
           bitrateMeters[index] = StreamBitrateMeter()
+          audioFlags[index] = true
         }
         C.TRACK_TYPE_TEXT -> {
           val kind = when (mime) {
@@ -419,6 +422,7 @@ internal class FfmpegExtractor private constructor(
       trackOutputs[index] = trackOutput
     }
 
+    audioStreamIndices = audioFlags
     primaryStreamIndex = if (primaryVideo >= 0) primaryVideo else primaryAudio
     primaryStreamIsAudio = primaryVideo < 0 && primaryAudio >= 0
     synchronized(seekIndexLock) {
@@ -462,7 +466,8 @@ internal class FfmpegExtractor private constructor(
           val size = packetOut[FfmpegDemuxerJni.OUT_SIZE].toInt()
           val trackOutput = trackOutputs.getOrNull(streamIndex) ?: continue
           val ptsUs = packetOut[FfmpegDemuxerJni.OUT_PTS_US]
-          val isKeyframe = packetOut[FfmpegDemuxerJni.OUT_FLAGS] and 1L != 0L
+          val isAudio = audioStreamIndices.getOrNull(streamIndex) == true
+          val isKeyframe = isAudio || (packetOut[FfmpegDemuxerJni.OUT_FLAGS] and 1L != 0L)
           val subtitleKind = subtitleKinds.getOrNull(streamIndex) ?: SubtitleKind.NONE
           if (subtitleKind != SubtitleKind.NONE) {
             // Text samples carry their duration inside the sample text, in

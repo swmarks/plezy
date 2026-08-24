@@ -481,6 +481,8 @@ const char* subtitleMime(AVCodecID id) {
       return "text/vtt";
     case AV_CODEC_ID_HDMV_PGS_SUBTITLE:
       return "application/pgs";
+    case AV_CODEC_ID_MOV_TEXT:
+      return "application/x-quicktime-tx3g";
     case AV_CODEC_ID_DVD_SUBTITLE:
       // media3's VobsubParser takes the .idx text (Matroska CodecPrivate,
       // surfaced verbatim as extradata) as initialization data and the raw
