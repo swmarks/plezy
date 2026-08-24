@@ -58,8 +58,8 @@ plugins {
   id("dev.flutter.flutter-gradle-plugin")
 }
 
-val mpvVersion = "v1.0.7-ac4.2"
-val mpvSha256 = "b8cc552dc0a27b2afac1cb1f37ff6b223c3a3e99f79e9b25c0f672ff44dd0e8a"
+val mpvVersion = "dummy"
+val mpvSha256 = "dummy"
 val mpvDir = layout.buildDirectory.dir("libmpv").get().asFile
 val mpvAar = "libmpv-release.aar"
 val mpvUrl = "https://github.com/swmarks/libmpv-android/releases/download/$mpvVersion/$mpvAar"
