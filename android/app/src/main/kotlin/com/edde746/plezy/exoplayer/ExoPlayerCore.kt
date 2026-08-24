@@ -2041,7 +2041,15 @@ class ExoPlayerCore(private val activity: Activity) :
         "id" to trackId,
         "title" to format.label,
         "lang" to format.language,
-        "codec" to format.codecs,
+        "codec" to (format.codecs ?: when (format.sampleMimeType) {
+          "application/x-quicktime-tx3g", "application/x-mp4-cea-608" -> "mov_text"
+          "application/x-subrip" -> "subrip"
+          "text/x-ssa" -> "ass"
+          "text/vtt" -> "vtt"
+          "application/pgs" -> "pgs"
+          "application/vobsub" -> "vobsub"
+          else -> format.sampleMimeType?.substringAfterLast('/')
+        }),
         "default" to (format.selectionFlags and C.SELECTION_FLAG_DEFAULT != 0),
         "selected" to isSelected,
         "demux-channel-count" to format.channelCount,
@@ -2078,7 +2086,15 @@ class ExoPlayerCore(private val activity: Activity) :
         "id" to trackId,
         "title" to format.label,
         "lang" to format.language,
-        "codec" to format.codecs,
+        "codec" to (format.codecs ?: when (format.sampleMimeType) {
+          "application/x-quicktime-tx3g", "application/x-mp4-cea-608" -> "mov_text"
+          "application/x-subrip" -> "subrip"
+          "text/x-ssa" -> "ass"
+          "text/vtt" -> "vtt"
+          "application/pgs" -> "pgs"
+          "application/vobsub" -> "vobsub"
+          else -> format.sampleMimeType?.substringAfterLast('/')
+        }),
         "default" to (format.selectionFlags and C.SELECTION_FLAG_DEFAULT != 0),
         "forced" to (format.selectionFlags and C.SELECTION_FLAG_FORCED != 0),
         "selected" to isSelected,
@@ -2104,7 +2120,15 @@ class ExoPlayerCore(private val activity: Activity) :
         "id" to trackId,
         "title" to format.label,
         "lang" to format.language,
-        "codec" to format.codecs,
+        "codec" to (format.codecs ?: when (format.sampleMimeType) {
+          "application/x-quicktime-tx3g", "application/x-mp4-cea-608" -> "mov_text"
+          "application/x-subrip" -> "subrip"
+          "text/x-ssa" -> "ass"
+          "text/vtt" -> "vtt"
+          "application/pgs" -> "pgs"
+          "application/vobsub" -> "vobsub"
+          else -> format.sampleMimeType?.substringAfterLast('/')
+        }),
         "default" to (format.selectionFlags and C.SELECTION_FLAG_DEFAULT != 0),
         "selected" to group.isSelected
       )
