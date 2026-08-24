@@ -417,6 +417,8 @@ const char* audioMime(AVCodecID id, jint* pcmEncoding) {
       return "audio/ac3";
     case AV_CODEC_ID_EAC3:
       return "audio/eac3";
+    case AV_CODEC_ID_AC4:
+      return "audio/ac4";
     case AV_CODEC_ID_DTS:
       return "audio/vnd.dts";
     case AV_CODEC_ID_TRUEHD:

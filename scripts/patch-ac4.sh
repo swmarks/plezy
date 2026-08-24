@@ -245,4 +245,23 @@ else:
 "
 fi
 
+# 10. Enable AC-4 audio MIME in FFmpeg demuxer JNI (Plezy 2.17.0+)
+if [ -f "android/app/src/main/cpp/media3_ffmpeg_demuxer/ffmpeg_demuxer_jni.cc" ]; then
+    python3 -c "
+with open('android/app/src/main/cpp/media3_ffmpeg_demuxer/ffmpeg_demuxer_jni.cc', 'r') as f:
+    text = f.read()
+
+if 'case AV_CODEC_ID_AC4:' not in text:
+    text = text.replace(
+        'case AV_CODEC_ID_EAC3:\n      return \"audio/eac3\";',
+        'case AV_CODEC_ID_EAC3:\n      return \"audio/eac3\";\n    case AV_CODEC_ID_AC4:\n      return \"audio/ac4\";'
+    )
+    with open('android/app/src/main/cpp/media3_ffmpeg_demuxer/ffmpeg_demuxer_jni.cc', 'w') as f:
+        f.write(text)
+    print('  [✓] Enabled AV_CODEC_ID_AC4 in ffmpeg_demuxer_jni.cc')
+else:
+    print('  [-] ffmpeg_demuxer_jni.cc already has AV_CODEC_ID_AC4')
+"
+fi
+
 echo "==> AC-4 patch application complete."
