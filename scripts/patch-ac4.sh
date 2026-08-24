@@ -114,7 +114,7 @@ new_sub_codec = '''\"codec\" to (format.codecs ?: when (format.sampleMimeType) {
           \"text/vtt\" -> \"vtt\"
           \"application/pgs\" -> \"pgs\"
           \"application/vobsub\" -> \"vobsub\"
-          else -> format.sampleMimeType?.substringAfterLast('/')
+          else -> format.codecs ?: format.sampleMimeType?.substringAfterLast('/')
         }),'''
 
 if old_sub_codec in text:
