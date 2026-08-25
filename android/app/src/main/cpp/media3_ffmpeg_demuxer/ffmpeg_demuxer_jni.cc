@@ -351,8 +351,6 @@ const char* audioMime(AVCodecID id, jint* pcmEncoding) {
       return "audio/vnd.dts";
     case AV_CODEC_ID_TRUEHD:
       return "audio/true-hd";
-    case AV_CODEC_ID_AC4:
-      return "audio/ac4";
     case AV_CODEC_ID_FLAC:
       return "audio/flac";
     case AV_CODEC_ID_OPUS:
@@ -416,8 +414,6 @@ const char* subtitleMime(AVCodecID id) {
       // surfaced verbatim as extradata) as initialization data and the raw
       // SPU payloads as samples — exactly what this path delivers.
       return "application/vobsub";
-    case AV_CODEC_ID_MOV_TEXT:
-      return "application/x-quicktime-tx3g";
     default:
       // DVB subtitles are deliberately dropped: media3's DvbParser expects
       // the TS/PMT 5-byte config, not Matroska CodecPrivate, and DVB rides
