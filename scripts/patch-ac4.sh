@@ -23,6 +23,38 @@ else:
     print('  [-] lib/utils/codec_utils.dart already patched')
 "
 
+
+# 1b. CodecUtils: map tx3g MIME type to MOV display label and recognize as text subtitle
+python3 -c "
+with open('lib/utils/codec_utils.dart', 'r') as f:
+    text = f.read()
+
+changed = False
+
+# formatSubtitleCodec: recognize the raw MIME as MOV
+if 'APPLICATION/X-QUICKTIME-TX3G' not in text:
+    text = text.replace(
+        \"'MOV_TEXT' => 'MOV',\",
+        \"'MOV_TEXT' || 'APPLICATION/X-QUICKTIME-TX3G' => 'MOV',\\n      'APPLICATION/X-MP4-CEA-608' => 'CC',\"
+    )
+    changed = True
+
+# isTextSubtitleCodec: recognize the raw MIME as text subtitle
+if 'application/x-quicktime-tx3g' not in text:
+    text = text.replace(
+        \"'srt' || 'subrip' || 'ass' || 'ssa' || 'webvtt' || 'vtt' || 'mov_text' => true,\",
+        \"'srt' || 'subrip' || 'ass' || 'ssa' || 'webvtt' || 'vtt' || 'mov_text' || 'application/x-quicktime-tx3g' => true,\"
+    )
+    changed = True
+
+if changed:
+    with open('lib/utils/codec_utils.dart', 'w') as f:
+        f.write(text)
+    print('  [✓] Patched codec_utils.dart for tx3g MIME display')
+else:
+    print('  [-] codec_utils.dart tx3g MIME already patched')
+"
+
 # 2. Plex Client HLS Transcode Targets
 python3 -c "
 with open('lib/services/plex_client.dart', 'r') as f:
