@@ -106,19 +106,17 @@ if 'val hasAudioTrack = player.currentTracks.groups.any' in text:
         }'''
     text = text.replace(old_watchdog, new_watchdog)
 
-old_sub_codec = '\"codec\" to format.codecs,'
-new_sub_codec = '''\"codec\" to (when (format.sampleMimeType) {
-          \"application/x-quicktime-tx3g\", \"application/x-mp4-cea-608\" -> \"mov_text\"
-          \"application/x-subrip\" -> \"subrip\"
-          \"text/x-ssa\" -> \"ass\"
-          \"text/vtt\" -> \"vtt\"
-          \"application/pgs\" -> \"pgs\"
-          \"application/vobsub\" -> \"vobsub\"
-          else -> format.codecs ?: format.sampleMimeType?.substringAfterLast('/')
-        }),'''
-
-if old_sub_codec in text:
-    text = text.replace(old_sub_codec, new_sub_codec)
+# Upstream 2.17.1 already has format.codecs ?: when(...) but that bypasses
+# our MIME mapping when format.codecs is non-null (e.g. tx3g). Fix: evaluate
+# sampleMimeType first, fall back to format.codecs in the else branch.
+old_codec_pattern = 'format.codecs ?: when (format.sampleMimeType)'
+new_codec_pattern = 'when (format.sampleMimeType)'
+if old_codec_pattern in text:
+    text = text.replace(old_codec_pattern, new_codec_pattern)
+    # Also fix the else branch to include format.codecs as fallback
+    old_else = 'else -> format.sampleMimeType?.substringAfterLast'
+    new_else = 'else -> format.codecs ?: format.sampleMimeType?.substringAfterLast'
+    text = text.replace(old_else, new_else)
 
 with open('android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt', 'w') as f:
     f.write(text)
