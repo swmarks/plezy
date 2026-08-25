@@ -40,7 +40,7 @@ class CodecUtils {
   static bool isTextSubtitleCodec(String? codec) {
     if (codec == null) return false;
     return switch (codec.toLowerCase()) {
-      'srt' || 'subrip' || 'ass' || 'ssa' || 'webvtt' || 'vtt' || 'mov_text' || 'application/x-quicktime-tx3g' => true,
+      'srt' || 'subrip' || 'ass' || 'ssa' || 'webvtt' || 'vtt' || 'mov_text' => true,
       _ => false,
     };
   }
@@ -81,8 +81,7 @@ class CodecUtils {
       'DVD_SUBTITLE' => 'DVD',
       'WEBVTT' => 'VTT',
       'HDMV_PGS_SUBTITLE' => 'PGS',
-      'MOV_TEXT' || 'APPLICATION/X-QUICKTIME-TX3G' => 'MOV',
-      'APPLICATION/X-MP4-CEA-608' => 'CC',
+      'MOV_TEXT' => 'MOV',
       _ => upper,
     };
   }

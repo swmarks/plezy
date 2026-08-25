@@ -100,10 +100,8 @@ public final class FfmpegAudioRenderer extends DecoderAudioRenderer<FfmpegAudioD
   }
 
   private boolean sinkSupportsFormat(Format inputFormat, @C.PcmEncoding int pcmEncoding) {
-    int channelCount = inputFormat.channelCount != Format.NO_VALUE ? inputFormat.channelCount : 2;
-    int sampleRate = inputFormat.sampleRate != Format.NO_VALUE ? inputFormat.sampleRate : 48000;
     return sinkSupportsFormat(
-        Util.getPcmFormat(pcmEncoding, channelCount, sampleRate));
+        Util.getPcmFormat(pcmEncoding, inputFormat.channelCount, inputFormat.sampleRate));
   }
 
   private boolean shouldOutputFloat(Format inputFormat) {
@@ -111,13 +109,11 @@ public final class FfmpegAudioRenderer extends DecoderAudioRenderer<FfmpegAudioD
       return true;
     }
 
-    int channelCount = inputFormat.channelCount != Format.NO_VALUE ? inputFormat.channelCount : 2;
-    int sampleRate = inputFormat.sampleRate != Format.NO_VALUE ? inputFormat.sampleRate : 48000;
     @SinkFormatSupport
     int formatSupport =
         getSinkFormatSupport(
             Util.getPcmFormat(
-                C.ENCODING_PCM_FLOAT, channelCount, sampleRate));
+                C.ENCODING_PCM_FLOAT, inputFormat.channelCount, inputFormat.sampleRate));
     switch (formatSupport) {
       case SINK_FORMAT_SUPPORTED_DIRECTLY:
         return !MimeTypes.AUDIO_AC3.equals(inputFormat.sampleMimeType);

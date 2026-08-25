@@ -1110,7 +1110,7 @@ void main() {
       contains(
         'add-transcode-target(type=videoProfile&context=streaming'
         '&protocol=hls&container=mp4&videoCodec=h264%2Chevc'
-        '&audioCodec=aac%2Cac3%2Ceac3%2Cmp3%2Cac4)',
+        '&audioCodec=aac%2Cac3%2Ceac3%2Cmp3)',
       ),
     );
     expect(
@@ -1171,7 +1171,7 @@ void main() {
       contains(
         'add-transcode-target(type=videoProfile&context=streaming'
         '&protocol=hls&container=mpegts&videoCodec=h264'
-        '&audioCodec=aac%2Cac3%2Ceac3%2Cmp3%2Cac4)',
+        '&audioCodec=aac%2Cac3%2Ceac3%2Cmp3)',
       ),
     );
     expect(profile, isNot(contains('hevc')));

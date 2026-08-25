@@ -327,8 +327,6 @@ class MpvPlayerCore private constructor(
               setOption("vo", initialVideoOutput(hardwareDecoding))
               setOption("gpu-context", "android")
               setOption("opengl-es", "yes")
-              setOption("hwdec", "auto-safe")
-              setOption("hwdec-codecs", "all")
               if (displayFpsOverride != null) {
                 setOption("display-fps-override", displayFpsOverride)
               }
