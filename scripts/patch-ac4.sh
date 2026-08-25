@@ -107,7 +107,7 @@ if 'val hasAudioTrack = player.currentTracks.groups.any' in text:
     text = text.replace(old_watchdog, new_watchdog)
 
 old_sub_codec = '\"codec\" to format.codecs,'
-new_sub_codec = '''\"codec\" to (format.codecs ?: when (format.sampleMimeType) {
+new_sub_codec = '''\"codec\" to (when (format.sampleMimeType) {
           \"application/x-quicktime-tx3g\", \"application/x-mp4-cea-608\" -> \"mov_text\"
           \"application/x-subrip\" -> \"subrip\"
           \"text/x-ssa\" -> \"ass\"
