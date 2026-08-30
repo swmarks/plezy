@@ -73,9 +73,18 @@ jobs:
 
 
       - name: Apply AC-4 patches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x scripts/patch-ac4.sh
-          bash scripts/patch-ac4.sh "v1.0.7-ac4.2" "b8cc552dc0a27b2afac1cb1f37ff6b223c3a3e99f79e9b25c0f672ff44dd0e8a"
+          MPV_VERSION=$(gh api repos/swmarks/libmpv-android/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+          if [ -z "$MPV_VERSION" ]; then
+            echo "Error: No libmpv-android release found"
+            exit 1
+          fi
+          gh release download "$MPV_VERSION" --repo swmarks/libmpv-android --pattern "libmpv-release.aar" --output /tmp/libmpv-release.aar --clobber
+          MPV_SHA256=$(sha256sum /tmp/libmpv-release.aar | awk '{print $1}')
+          bash scripts/patch-ac4.sh "$MPV_VERSION" "$MPV_SHA256"
 
       - name: Configure Android signing
         env:

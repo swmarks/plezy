@@ -49,14 +49,29 @@ jobs:
           CURRENT_VERSION=$(grep '^version:' pubspec.yaml | head -n1 | awk '{print $2}' | cut -d'+' -f1)
           echo "Current Plezy version in fork: $CURRENT_VERSION"
 
-          # 3. Query libmpv-android Upstream and Fork Releases
-          MPV_UPSTREAM_COMMIT=$(gh api repos/edde746/libmpv-android/commits/main --jq '.sha')
-          MPV_LATEST_RELEASE=$(gh api repos/swmarks/libmpv-android/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
-          echo "Latest upstream libmpv-android commit: ${MPV_UPSTREAM_COMMIT:0:7}"
-          echo "Latest swmarks/libmpv-android release: $MPV_LATEST_RELEASE"
-
-          # 4. Check if libmpv-android needs rebuild
+          # 3. Ensure libmpv-android fork is up to date
+          echo "Checking libmpv-android upstream..."
+          git clone https://${GH_TOKEN}@github.com/swmarks/libmpv-android.git /tmp/libmpv-android
+          cd /tmp/libmpv-android
+          git remote add upstream https://github.com/edde746/libmpv-android.git
+          git fetch upstream
+          
+          BEHIND=$(git rev-list --count HEAD..upstream/main)
           REBUILD_MPV=false
+          if [ "$BEHIND" -gt 0 ] || [ "$FORCE_REBUILD" = "true" ]; then
+            echo "libmpv-android fork is behind by $BEHIND commits, rebasing..."
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git rebase upstream/main
+            git push origin main --force
+            REBUILD_MPV=true
+          else
+            echo "libmpv-android fork is up to date."
+          fi
+          cd -
+
+          # 4. Check if we need to trigger a build for a new release
+          MPV_LATEST_RELEASE=$(gh api repos/swmarks/libmpv-android/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
           if [ -z "$MPV_LATEST_RELEASE" ]; then
             REBUILD_MPV=true
           fi
