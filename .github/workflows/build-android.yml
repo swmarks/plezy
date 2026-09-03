@@ -1,0 +1,153 @@
+name: Build Android Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - '*.*.*-ac4*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release Tag (e.g. v2.14.0-ac4.1)"
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      release_tag:
+        description: "Release Tag (e.g. v2.14.0-ac4.1)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  FLUTTER_VERSION: "3.47.1"
+  RELEASE_DART_DEFINES: --dart-define=ENABLE_UPDATE_CHECK=true --dart-define=GIT_COMMIT=${{ github.sha }} --dart-define=ENABLE_DONATIONS=true
+
+jobs:
+  build-android:
+    name: Build Android APKs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Java
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: false
+
+      - name: Cache Pub dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.yaml', 'pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Cache Gradle
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile --no-example
+
+
+      - name: Apply AC-4 patches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x scripts/patch-ac4.sh
+          MPV_VERSION=$(gh api repos/swmarks/libmpv-android/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+          if [ -z "$MPV_VERSION" ]; then
+            echo "Error: No libmpv-android release found"
+            exit 1
+          fi
+          gh release download "$MPV_VERSION" --repo swmarks/libmpv-android --pattern "libmpv-release.aar" --output /tmp/libmpv-release.aar --clobber
+          MPV_SHA256=$(sha256sum /tmp/libmpv-release.aar | awk '{print $1}')
+          bash scripts/patch-ac4.sh "$MPV_VERSION" "$MPV_SHA256"
+
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+            cat > android/key.properties << EOF
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+            echo "Android signing configured."
+          else
+            echo "Warning: No keystore found in secrets. Building unsigned/debug-signed."
+          fi
+
+      - name: Build APKs
+        run: |
+          flutter build apk --release --split-per-abi ${{ env.RELEASE_DART_DEFINES }}
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f android/app/upload-keystore.jks android/key.properties
+
+      - name: Prepare APK Artifacts
+        id: prepare-apks
+        run: |
+          mkdir -p release-apks
+          
+          VERSION=$(grep '^version:' pubspec.yaml | head -n1 | awk '{print $2}' | cut -d'+' -f1)
+          TAG="${{ inputs.release_tag }}"
+          [ -z "$TAG" ] && TAG="${{ github.ref_name }}"
+          [ -z "$TAG" ] && TAG="v${VERSION}-ac4"
+          
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          
+          # Copy and rename architecture APKs
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk release-apks/plezy-${TAG}-arm64-v8a.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk release-apks/plezy-${TAG}-armeabi-v7a.apk
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk release-apks/plezy-${TAG}-x86_64.apk
+
+          ls -la release-apks/
+
+      - name: Upload APK Artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: plezy-android-apks
+          path: release-apks/*.apk
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || (inputs.release_tag != '')
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        with:
+          tag_name: ${{ env.TAG }}
+          name: "Plezy ${{ env.TAG }} (with AC-4 Support)"
+          draft: false
+          prerelease: false
+          files: release-apks/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
