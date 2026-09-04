@@ -633,6 +633,12 @@ class Translations$settings$en {
 	/// en: 'Same as Default Quality'
 	String get cellularQualitySameAsDefault => 'Same as Default Quality';
 
+	/// en: 'Play Smaller Videos at Original Quality'
+	String get directPlayCoveredQuality => 'Play Smaller Videos at Original Quality';
+
+	/// en: 'Direct play videos already within the quality limit instead of transcoding them'
+	String get directPlayCoveredQualityDescription => 'Direct play videos already within the quality limit instead of transcoding them';
+
 	/// en: 'Music Quality'
 	String get musicQualityTitle => 'Music Quality';
 
@@ -1202,6 +1208,12 @@ class Translations$settings$en {
 
 	/// en: 'Pinch on the video to zoom in or out'
 	String get gesturePinchToZoomDescription => 'Pinch on the video to zoom in or out';
+
+	/// en: 'Remember Brightness Level'
+	String get rememberBrightnessLevel => 'Remember Brightness Level';
+
+	/// en: 'Start playback at the brightness set by the last swipe'
+	String get rememberBrightnessLevelDescription => 'Start playback at the brightness set by the last swipe';
 
 	/// en: 'Controls'
 	String get controls => 'Controls';
@@ -2493,6 +2505,15 @@ class Translations$mpvConfig$en {
 
 	/// en: 'gpu-api=vulkan hwdec=auto # comment'
 	String get configPlaceholder => 'gpu-api=vulkan\nhwdec=auto\n# comment';
+
+	/// en: 'option=value'
+	String get lineHint => 'option=value';
+
+	/// en: 'Add line'
+	String get addLine => 'Add line';
+
+	/// en: 'Remove line'
+	String get removeLine => 'Remove line';
 
 	/// en: 'vo, gpu-context and gpu-api are ignored on Linux: embedded video always renders through vo=libmpv on the video plane, and gpu-next (which compute shaders like ArtCNN need) cannot run embedded.'
 	String get embeddedVoHint => 'vo, gpu-context and gpu-api are ignored on Linux: embedded video always renders through vo=libmpv on the video plane, and gpu-next (which compute shaders like ArtCNN need) cannot run embedded.';
@@ -4016,6 +4037,27 @@ class Translations$watchTogether$en {
 	/// en: 'You are the host'
 	String get youAreHost => 'You are the host';
 
+	/// en: 'Make host'
+	String get makeHost => 'Make host';
+
+	/// en: 'Transfer host?'
+	String get makeHostQuestion => 'Transfer host?';
+
+	/// en: '${name} will control playback and drive the session for everyone.'
+	String makeHostConfirm({required Object name}) => '${name} will control playback and drive the session for everyone.';
+
+	/// en: 'Transfer'
+	String get transfer => 'Transfer';
+
+	/// en: '${name} is now the host'
+	String hostChangedTo({required Object name}) => '${name} is now the host';
+
+	/// en: 'You are now the host'
+	String get youAreNowHost => 'You are now the host';
+
+	/// en: 'Couldn't make ${name} the host'
+	String hostTransferFailed({required Object name}) => 'Couldn\'t make ${name} the host';
+
 	/// en: 'Watching with others'
 	String get watchingWithOthers => 'Watching with others';
 
@@ -4111,6 +4153,9 @@ class Translations$watchTogether$en {
 
 	/// en: '${name} changed the playback position'
 	String participantSeeked({required Object name}) => '${name} changed the playback position';
+
+	/// en: '${name} set the speed to ${speed}'
+	String participantChangedSpeed({required Object name, required Object speed}) => '${name} set the speed to ${speed}';
 
 	/// en: '${name} is buffering'
 	String participantBuffering({required Object name}) => '${name} is buffering';
@@ -5180,6 +5225,18 @@ class Translations$seerr$en {
 	/// en: 'Language profile'
 	String get languageProfile => 'Language profile';
 
+	/// en: 'Tags'
+	String get tags => 'Tags';
+
+	/// en: 'No tags'
+	String get noTags => 'No tags';
+
+	/// en: '${name} (Default)'
+	String defaultOption({required Object name}) => '${name} (Default)';
+
+	/// en: 'This series is an anime.'
+	String get animeNote => 'This series is an anime.';
+
 	/// en: 'Request submitted'
 	String get requestSubmitted => 'Request submitted';
 
@@ -5212,6 +5269,9 @@ class Translations$seerr$en {
 
 	/// en: 'No Seerr instance at ${url} (HTTP ${status})'
 	String noInstanceAtUrl({required Object url, required Object status}) => 'No Seerr instance at ${url} (HTTP ${status})';
+
+	/// en: 'An authenticating reverse proxy (SSO or HTTP auth) answered instead of Seerr. Plezy cannot sign in through it: let Seerr's /api/v1 path bypass the proxy for this app, or use an address that reaches Seerr directly.'
+	String get behindAuthProxy => 'An authenticating reverse proxy (SSO or HTTP auth) answered instead of Seerr. Plezy cannot sign in through it: let Seerr\'s /api/v1 path bypass the proxy for this app, or use an address that reaches Seerr directly.';
 
 	/// en: 'Enter a server address like https://seerr.example.com'
 	String get invalidUrl => 'Enter a server address like https://seerr.example.com';
@@ -7098,6 +7158,8 @@ extension on Translations {
 			'settings.defaultQualityTitle' => 'Default Quality',
 			'settings.cellularQualityTitle' => 'Default Quality on Cellular',
 			'settings.cellularQualitySameAsDefault' => 'Same as Default Quality',
+			'settings.directPlayCoveredQuality' => 'Play Smaller Videos at Original Quality',
+			'settings.directPlayCoveredQualityDescription' => 'Direct play videos already within the quality limit instead of transcoding them',
 			'settings.musicQualityTitle' => 'Music Quality',
 			'settings.subtitleStyling' => 'Subtitle Styling',
 			'settings.subtitleStylingDescription' => 'Customize subtitle appearance',
@@ -7288,6 +7350,8 @@ extension on Translations {
 			'settings.gestureVolumeSwipeDescription' => 'Swipe up or down on the right edge to adjust volume',
 			'settings.gesturePinchToZoom' => 'Pinch to Zoom',
 			'settings.gesturePinchToZoomDescription' => 'Pinch on the video to zoom in or out',
+			'settings.rememberBrightnessLevel' => 'Remember Brightness Level',
+			'settings.rememberBrightnessLevelDescription' => 'Start playback at the brightness set by the last swipe',
 			'settings.controls' => 'Controls',
 			'settings.rememberPlayerChanges' => 'Remember Player Changes',
 			'settings.rememberPlayerChangesDescription' => 'Where a change made during playback is saved and reapplied from',
@@ -7422,12 +7486,12 @@ extension on Translations {
 			'fileInfo.filePresent' => 'File Present',
 			'fileInfo.fileReadable' => 'Readable by Server',
 			'fileInfo.streamPath' => 'Stream Path',
+			_ => null,
+		} ?? switch (path) {
 			'fileInfo.optimizedForStreaming' => 'Optimized for Streaming',
 			'fileInfo.has64bitOffsets' => '64-bit Offsets',
 			'fileInfo.protocol' => 'Protocol',
 			'fileInfo.mediaType' => 'Media Type',
-			_ => null,
-		} ?? switch (path) {
 			'fileInfo.sourceKind' => 'Source Kind',
 			'fileInfo.optimizedVersion' => 'Optimized Version',
 			'fileInfo.optimizationTarget' => 'Optimization Target',
@@ -7712,6 +7776,9 @@ extension on Translations {
 			'mpvConfig.presetDeleted' => 'Preset deleted',
 			'mpvConfig.confirmDeletePreset' => 'Are you sure you want to delete this preset?',
 			'mpvConfig.configPlaceholder' => 'gpu-api=vulkan\nhwdec=auto\n# comment',
+			'mpvConfig.lineHint' => 'option=value',
+			'mpvConfig.addLine' => 'Add line',
+			'mpvConfig.removeLine' => 'Remove line',
 			'mpvConfig.embeddedVoHint' => 'vo, gpu-context and gpu-api are ignored on Linux: embedded video always renders through vo=libmpv on the video plane, and gpu-next (which compute shaders like ArtCNN need) cannot run embedded.',
 			'dialog.confirmAction' => 'Confirm Action',
 			'profiles.addPlezyProfile' => 'Add Plezy profile',
@@ -7933,6 +8000,8 @@ extension on Translations {
 			'libraries.groupings.episodes' => 'Episodes',
 			'libraries.groupings.artists' => 'Artists',
 			'libraries.groupings.albums' => 'Albums',
+			_ => null,
+		} ?? switch (path) {
 			'libraries.groupings.tracks' => 'Tracks',
 			'libraries.groupings.folders' => 'Folders',
 			'libraries.filterCategories.genre' => 'Genre',
@@ -7940,8 +8009,6 @@ extension on Translations {
 			'libraries.filterCategories.contentRating' => 'Content Rating',
 			'libraries.filterCategories.tag' => 'Tag',
 			'libraries.filterCategories.unwatched' => 'Unwatched',
-			_ => null,
-		} ?? switch (path) {
 			'libraries.filterCategories.unplayed' => 'Unplayed',
 			'libraries.filterCategories.favorites' => 'Favorites',
 			'libraries.sortLabels.title' => 'Title',
@@ -8346,6 +8413,13 @@ extension on Translations {
 			'watchTogether.host' => 'Host',
 			'watchTogether.hostBadge' => 'HOST',
 			'watchTogether.youAreHost' => 'You are the host',
+			'watchTogether.makeHost' => 'Make host',
+			'watchTogether.makeHostQuestion' => 'Transfer host?',
+			'watchTogether.makeHostConfirm' => ({required Object name}) => '${name} will control playback and drive the session for everyone.',
+			'watchTogether.transfer' => 'Transfer',
+			'watchTogether.hostChangedTo' => ({required Object name}) => '${name} is now the host',
+			'watchTogether.youAreNowHost' => 'You are now the host',
+			'watchTogether.hostTransferFailed' => ({required Object name}) => 'Couldn\'t make ${name} the host',
 			'watchTogether.watchingWithOthers' => 'Watching with others',
 			'watchTogether.endSession' => 'End Session',
 			'watchTogether.leaveSession' => 'Leave Session',
@@ -8378,6 +8452,7 @@ extension on Translations {
 			'watchTogether.participantPaused' => ({required Object name}) => '${name} paused',
 			'watchTogether.participantResumed' => ({required Object name}) => '${name} resumed',
 			'watchTogether.participantSeeked' => ({required Object name}) => '${name} changed the playback position',
+			'watchTogether.participantChangedSpeed' => ({required Object name, required Object speed}) => '${name} set the speed to ${speed}',
 			'watchTogether.participantBuffering' => ({required Object name}) => '${name} is buffering',
 			'watchTogether.participantNeedsUpdate' => ({required Object name}) => '${name} is on an older app version — sync unavailable',
 			'watchTogether.resumingWithout' => ({required Object name}) => 'Resuming without ${name}',
@@ -8439,6 +8514,8 @@ extension on Translations {
 			'downloads.invalidEpisodeCount' => 'Enter a valid episode count.',
 			'downloads.keepSynced' => 'Keep synced',
 			'downloads.downloadOnce' => 'Download once',
+			_ => null,
+		} ?? switch (path) {
 			'downloads.keepNUnwatched' => ({required Object count}) => 'Keep ${count} unwatched',
 			'downloads.editSyncRule' => 'Edit sync rule',
 			'downloads.removeSyncRule' => 'Remove sync rule',
@@ -8454,8 +8531,6 @@ extension on Translations {
 			'downloads.syncRuleCleanupUnavailable' => 'Associated downloads could not be identified safely. Reconnect the server and try again, or remove the rule without deleting downloads.',
 			'downloads.syncedNewEpisodes' => ({required Object count, required Object title}) => 'Synced ${count} new episodes for ${title}',
 			'downloads.activeSyncRules' => 'Sync rules',
-			_ => null,
-		} ?? switch (path) {
 			'downloads.noSyncRules' => 'No sync rules',
 			'downloads.manageSyncRule' => 'Manage sync',
 			'downloads.editEpisodeCount' => 'Episode count',
@@ -8792,6 +8867,10 @@ extension on Translations {
 			'seerr.qualityProfile' => 'Quality profile',
 			'seerr.rootFolder' => 'Root folder',
 			'seerr.languageProfile' => 'Language profile',
+			'seerr.tags' => 'Tags',
+			'seerr.noTags' => 'No tags',
+			'seerr.defaultOption' => ({required Object name}) => '${name} (Default)',
+			'seerr.animeNote' => 'This series is an anime.',
 			'seerr.requestSubmitted' => 'Request submitted',
 			'seerr.requestFailed' => ({required Object error}) => 'Request failed: ${error}',
 			'seerr.requestsLoadFailed' => 'Couldn\'t load request options',
@@ -8803,6 +8882,7 @@ extension on Translations {
 			'seerr.statusBlocklisted' => 'Blocklisted',
 			'seerr.couldNotReach' => ({required Object url, required Object error}) => 'Could not reach ${url}: ${error}',
 			'seerr.noInstanceAtUrl' => ({required Object url, required Object status}) => 'No Seerr instance at ${url} (HTTP ${status})',
+			'seerr.behindAuthProxy' => 'An authenticating reverse proxy (SSO or HTTP auth) answered instead of Seerr. Plezy cannot sign in through it: let Seerr\'s /api/v1 path bypass the proxy for this app, or use an address that reaches Seerr directly.',
 			'seerr.invalidUrl' => 'Enter a server address like https://seerr.example.com',
 			'seerr.quickConnectUnsupported' => 'This Seerr instance does not support Quick Connect. It needs Seerr 3.4 or newer.',
 			'seerr.notInitialized' => 'This Seerr instance has not completed first-run setup',

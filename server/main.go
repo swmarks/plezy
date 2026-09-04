@@ -75,7 +75,6 @@ const (
 	maxRetainedRooms                = 2000
 	connRateBurst                   = 5
 	connRateSustained               = 1
-	reconnectTokenSize              = 32
 	snapshotFormatVersion           = 4
 	snapshotDebounce                = 100 * time.Millisecond
 	snapshotFlushTimeout            = 5 * time.Second
@@ -1251,7 +1250,7 @@ func (s *Server) loadSnapshot(path string) (bool, error) {
 			skipped++
 			continue
 		}
-		if r.ProtocolVersion != legacyRelayProtocolVersion && r.ProtocolVersion != relayProtocolVersion {
+		if !supportedRelayProtocolVersion(r.ProtocolVersion) {
 			skipped++
 			continue
 		}
@@ -1784,7 +1783,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 				client.sendJSON(serverMsg{Type: relayTypeError, Code: relayErrorInvalidMessage, Message: "Invalid sessionId or peerId"})
 				continue
 			}
-			if msg.ProtocolVersion != legacyRelayProtocolVersion && msg.ProtocolVersion != relayProtocolVersion {
+			if !supportedRelayProtocolVersion(msg.ProtocolVersion) {
 				client.sendJSON(serverMsg{
 					Type:            relayTypeError,
 					Code:            relayErrorProtocolMismatch,
@@ -1930,7 +1929,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 				client.sendJSON(serverMsg{Type: relayTypeError, Code: relayErrorInvalidMessage, Message: "Invalid sessionId or peerId"})
 				continue
 			}
-			if msg.ProtocolVersion != legacyRelayProtocolVersion && msg.ProtocolVersion != relayProtocolVersion {
+			if !supportedRelayProtocolVersion(msg.ProtocolVersion) {
 				client.sendJSON(serverMsg{
 					Type:            relayTypeError,
 					Code:            relayErrorProtocolMismatch,
@@ -2276,6 +2275,80 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			currentPeerID = ""
 			for _, guest := range guests {
 				guest.close()
+			}
+
+		case relayTypeTransferHost:
+			if currentRoom == nil {
+				client.sendJSON(serverMsg{Type: relayTypeError, Code: relayErrorNotInRoom, Message: "Not in a room"})
+				continue
+			}
+			room := currentRoom
+			room.mu.Lock()
+			authorized :=
+				!room.closing &&
+					room.Peers[currentPeerID] == client &&
+					msg.ProtocolVersion == room.ProtocolVersion
+			if !authorized {
+				room.mu.Unlock()
+				client.sendJSON(serverMsg{Type: relayTypeError, Code: relayErrorPeerIdUnavailable, Message: "Unable to transfer host authority"})
+				continue
+			}
+			if currentPeerID != room.HostPeerID {
+				room.mu.Unlock()
+				client.sendJSON(serverMsg{Type: relayTypeError, Code: relayErrorNotHost, Message: "Only the host can transfer host authority"})
+				continue
+			}
+			if room.ProtocolVersion != relayProtocolVersion {
+				room.mu.Unlock()
+				client.sendJSON(serverMsg{Type: relayTypeError, Code: relayErrorInvalidMessage, Message: "Host transfer requires current protocol"})
+				continue
+			}
+			targetPeerID := msg.To
+			targetConnected := false
+			if validRelayID(targetPeerID, maxPeerIDLength) && targetPeerID != currentPeerID {
+				_, targetConnected = room.Peers[targetPeerID]
+			}
+			if !targetConnected {
+				room.mu.Unlock()
+				client.sendJSON(serverMsg{Type: relayTypeError, Code: relayErrorPeerNotFound, Message: "Target peer not found"})
+				continue
+			}
+			targetReservation, targetReserved := room.peerReservations[targetPeerID]
+			if !targetReserved || targetReservation.releasePending {
+				room.mu.Unlock()
+				if !targetReserved {
+					// Connected modern-room guests always hold a reservation.
+					log.Printf("transferHost: connected guest missing reservation")
+				}
+				client.sendJSON(serverMsg{Type: relayTypeError, Code: relayErrorPeerNotFound, Message: "Target peer not found"})
+				continue
+			}
+
+			// Swap authority. The host never holds a peer reservation (snapshot
+			// loading rejects that), so the target's reservation becomes the
+			// host verifier and the old host gains a connected reservation.
+			// Reconnect tokens are untouched: both peers keep their own.
+			oldHostPeerID := currentPeerID
+			delete(room.peerReservations, targetPeerID)
+			room.peerReservations[oldHostPeerID] = peerReservation{verifier: room.hostVerifier}
+			room.hostVerifier = targetReservation.verifier
+			room.HostPeerID = targetPeerID
+			room.LastActivityAt = time.Now()
+			recipients := make([]*Client, 0, len(room.Peers))
+			for _, peerClient := range room.Peers {
+				recipients = append(recipients, peerClient)
+			}
+			hostChanged := serverMsg{
+				Type:       relayTypeHostChanged,
+				SessionID:  room.SessionID,
+				HostPeerID: targetPeerID,
+				From:       oldHostPeerID,
+			}
+			s.snap.recordMutation()
+			room.mu.Unlock()
+
+			for _, peerClient := range recipients {
+				peerClient.sendJSON(hostChanged)
 			}
 
 		case relayTypeBroadcast:

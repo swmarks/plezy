@@ -76,6 +76,22 @@ enum MediaBrowserDialect {
     MediaBrowserDialect.emby => const [8920, 8096],
   };
 
+  /// Path of the realtime notification websocket. Same protocol on both
+  /// dialects (`?api_key=&deviceId=`, `ForceKeepAlive`/`KeepAlive`,
+  /// `LibraryChanged`); only the route differs. Verified against Jellyfin
+  /// 10.11 (`/socket`) and Emby 4.9.5 (`/embywebsocket`).
+  String get webSocketPath => switch (this) {
+    MediaBrowserDialect.jellyfin => '/socket',
+    MediaBrowserDialect.emby => '/embywebsocket',
+  };
+
+  /// Emby only routes `LibraryChanged` frames to sessions that registered
+  /// device capabilities. Measured on Emby 4.9.5: a websocket authenticated
+  /// with `api_key` received `RefreshProgress` but no `LibraryChanged` until
+  /// the device POSTed `/Sessions/Capabilities/Full`; Jellyfin 10.11 pushes
+  /// to every authenticated socket without it.
+  bool get requiresSessionCapabilitiesForLibraryEvents => this == MediaBrowserDialect.emby;
+
   /// `/QuickConnect/*` plus `POST /Users/AuthenticateWithQuickConnect`.
   bool get supportsQuickConnect => this == MediaBrowserDialect.jellyfin;
 
@@ -90,6 +106,16 @@ enum MediaBrowserDialect {
   /// `/MediaSegments/{itemId}` intro/outro/credit markers (Jellyfin 10.10+).
   /// Emby 404s; chapter-name fallback still applies.
   bool get supportsMediaSegments => this == MediaBrowserDialect.jellyfin;
+
+  /// Before taking the first entry of a `TranscodingProfile.VideoCodec` list,
+  /// the server rotates codecs the admin has not enabled
+  /// (`AllowHevcEncoding`/`AllowAv1Encoding`, both off by default) to the
+  /// back — Jellyfin's `EncodingHelper.ShiftVideoCodecsIfNeeded`. Emby has
+  /// no such step and no AV1 encoder at all: it hands `av1` straight to
+  /// ffmpeg and the HLS request fails with 500 `No video encoder found for
+  /// 'av1'` (#2230). Neither server checks actual encoder availability, so a
+  /// leading codec must be one the dialect is known to emit.
+  bool get rotatesDisabledTranscodeCodecs => this == MediaBrowserDialect.jellyfin;
 
   /// `GET /Audio/{id}/Lyrics` (Jellyfin 10.9+). Never call this on Emby: the
   /// route resolves to audio streaming with `Lyrics` as the container and

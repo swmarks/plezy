@@ -17,12 +17,12 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import com.edde746.plezy.exoplayer.DoviBridge
+import com.edde746.plezy.libmpv.*
 import com.edde746.plezy.shared.AudioFocusManager
 import com.edde746.plezy.shared.FrameRateManager
 import com.edde746.plezy.shared.PlayerDelegate
 import com.edde746.plezy.shared.PlayerSurfaceHost
 import com.edde746.plezy.shared.SurfacePlayerCore
-import dev.jdtech.mpv.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -461,7 +461,11 @@ class MpvPlayerCore private constructor(
           }
 
           if (disposing) {
-            p.close()
+            // dispose() can win after create's IO block but before this main-thread
+            // continuation. Native destruction is blocking, so finish it on IO too.
+            withContext(NonCancellable + Dispatchers.IO) {
+              p.close()
+            }
             onResult(false)
             return@launch
           }
@@ -508,6 +512,17 @@ class MpvPlayerCore private constructor(
     )
   }
 
+  private fun lifecycleData(
+    sourceId: Long?,
+    positionSeconds: Double? = null
+  ): Map<String, Any>? {
+    if (sourceId == null && positionSeconds == null) return null
+    return buildMap {
+      sourceId?.let { put("sourceId", it) }
+      positionSeconds?.let { put("positionSeconds", it) }
+    }
+  }
+
   private fun collectEvents(p: MpvPlayer) {
     scope.launch(start = CoroutineStart.UNDISPATCHED) {
       p.eventFlow.collect { event ->
@@ -522,7 +537,7 @@ class MpvPlayerCore private constructor(
             // file. A genuine failure re-arms it, costing one switch per bad
             // file instead of the whole session's HDR/10-bit scanout.
             setGpuVoRequirement(GpuVoPolicy.REASON_CHAIN_FAILURE, false)
-            delegate?.onEvent("start-file", null)
+            delegate?.onEvent("start-file", lifecycleData(event.sourceId))
           }
           is MpvEvent.FileLoaded -> {
             if (usesMediaCodecVo) {
@@ -536,10 +551,14 @@ class MpvPlayerCore private constructor(
                 }
               }
             }
-            delegate?.onEvent("file-loaded", null)
+            delegate?.onEvent("file-loaded", lifecycleData(event.sourceId))
           }
-          is MpvEvent.PlaybackRestart -> delegate?.onEvent("playback-restart", null)
-          else -> {}
+          is MpvEvent.PlaybackRestart -> {
+            delegate?.onEvent(
+              "playback-restart",
+              lifecycleData(event.sourceId, event.positionSeconds)
+            )
+          }
         }
       }
     }
@@ -562,7 +581,7 @@ class MpvPlayerCore private constructor(
         if (change.name == "pause" && change is PropertyChange.Flag) {
           cachedPaused = change.value
         }
-        delegate?.onPropertyChange(change.name, value)
+        delegate?.onPropertyChange(change.name, value, change.sourceId)
       }
     }
   }
@@ -1850,6 +1869,8 @@ class MpvPlayerCore private constructor(
     val osdSv = osdSurfaceView
     val container = surfaceContainer
     val contentView = if (audioOnly) null else activity.findViewById<ViewGroup>(android.R.id.content)
+    val retiringPlaceholderSurface = placeholderSurface
+    val retiringPlaceholderImageReader = placeholderImageReader
 
     surfaceContainer = null
     surfaceView = null
@@ -1864,9 +1885,7 @@ class MpvPlayerCore private constructor(
     overlayLayoutListener = null
 
     pendingSurface = null
-    placeholderSurface?.release()
     placeholderSurface = null
-    placeholderImageReader?.close()
     placeholderImageReader = null
     pausedForSurfaceLoss = false
     pausedForAudioFocusLoss = false
@@ -1882,27 +1901,18 @@ class MpvPlayerCore private constructor(
     pendingVideoOutputDisableJob = null
     isInitialized = false
 
-    // Detach surface and close player on background thread, then remove views
+    // Close the player on a background thread, then release surfaces and remove views.
     if (p != null) {
       Thread {
         try {
-          // Detach surface BEFORE close to prevent GPU mutex contention with
-          // view removal (audio-only never attached one)
-          if (!audioOnly) {
-            try {
-              runBlocking {
-                p.setProperty("force-window", "no")
-                p.setProperty("vo", "null")
-              }
-              p.detachSurface()
-            } catch (e: Exception) {
-              Log.w(TAG, "Failed to detach surface during dispose", e)
-            }
-          }
+          // Native close blocks through decoder and VO teardown. Keep both the
+          // SurfaceView surfaces and any attached placeholder alive until it returns.
           p.close()
         } catch (e: Exception) {
           Log.w(TAG, "MPV close failed", e)
         }
+        retiringPlaceholderSurface?.release()
+        retiringPlaceholderImageReader?.close()
         player = null
         Log.d(TAG, "Disposed (native)")
         Handler(Looper.getMainLooper()).post {
@@ -1916,6 +1926,8 @@ class MpvPlayerCore private constructor(
       }.start()
     } else {
       // No player — safe to remove views immediately
+      retiringPlaceholderSurface?.release()
+      retiringPlaceholderImageReader?.close()
       Handler(Looper.getMainLooper()).postAtFrontOfQueue {
         sv?.holder?.removeCallback(this)
         osdSv?.holder?.removeCallback(osdSurfaceCallback)

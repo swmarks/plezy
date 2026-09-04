@@ -22,6 +22,7 @@
 #endif
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
@@ -333,23 +334,14 @@ bool MpvPlayer::Initialize() {
     return false;
   }
 
-  if (audio_only_) {
-    // Music core: no VO, no video decode. vid=no keeps embedded cover art
-    // from ever becoming a video track, and force-window/audio-display make
-    // sure mpv never opens a video output for it either.
-    mpv_set_option_string(mpv_, "vid", "no");
-    mpv_set_option_string(mpv_, "force-window", "no");
-    mpv_set_option_string(mpv_, "audio-display", "no");
-    mpv_set_option_string(mpv_, "gapless-audio", "weak");
-  } else {
+  plezy::mpv_common::ApplyCommonStartupOptions(mpv_, audio_only_);
+  mpv_set_option_string(mpv_, "terminal", "no");
+
+  if (!audio_only_) {
     // Configure mpv for embedded playback.
     mpv_set_option_string(mpv_, "vo", "libmpv");
     mpv_set_option_string(mpv_, "hwdec", "auto");
-  }
-  mpv_set_option_string(mpv_, "keep-open", "yes");
-  mpv_set_option_string(mpv_, "audio-fallback-to-null", "yes");
 
-  if (!audio_only_) {
     // hdr-compute-peak is nested under the same predicate as the tone-map pass -
     // it runs exactly when the source's declared peak exceeds target-peak - so it
     // costs nothing while the compositor owns tone mapping and gives
@@ -364,18 +356,6 @@ bool MpvPlayer::Initialize() {
     // `hdr-enabled` write puts here through SetHDREnabled.
     mpv_set_option_string(mpv_, "target-colorspace-hint", plezy::mpv_common::TargetColorspaceHint(hdr_enabled_));
   }
-  mpv_set_option_string(mpv_, "idle", "yes");
-  mpv_set_option_string(mpv_, "input-default-bindings", "no");
-  mpv_set_option_string(mpv_, "input-vo-keyboard", "no");
-  mpv_set_option_string(mpv_, "osc", "no");
-  mpv_set_option_string(mpv_, "terminal", "no");
-  // Every URL Plezy opens is a media-server stream or a local file, never a
-  // site mpv's bundled ytdl_hook could resolve. Loading it costs an on_load
-  // hook per open and, on a failed open, spawns yt-dlp with the full stream
-  // URL — access token included — in its argv, where /proc exposes it. mpv
-  // gates loading the builtin script on this option at mpv_initialize time,
-  // so it has to be set here rather than from Dart.
-  mpv_set_option_string(mpv_, "ytdl", "no");
 
   // Default to info-level logging. The vaapi hwdec probe and the "Using
   // software decoding" fallback are MSGL_INFO messages, and both are the only
@@ -1149,6 +1129,7 @@ void MpvPlayer::HandleMpvEvent(mpv_event* event) {
       auto* end = static_cast<mpv_event_end_file*>(event->data);
       if (!end) break;
       FlValue* data = fl_value_new_map();
+      fl_value_set_string_take(data, "sourceId", fl_value_new_int(end->playlist_entry_id));
       fl_value_set_string_take(data, "reason", fl_value_new_int(static_cast<int>(end->reason)));
       if (end->reason == MPV_END_FILE_REASON_ERROR) {
         fl_value_set_string_take(data, "error", fl_value_new_int(static_cast<int>(end->error)));
@@ -1160,17 +1141,26 @@ void MpvPlayer::HandleMpvEvent(mpv_event* event) {
       break;
     }
     case MPV_EVENT_START_FILE: {
-      SendEvent("start-file");
+      auto* start = static_cast<mpv_event_start_file*>(event->data);
+      if (!start) break;
+      active_source_id_ = start->playlist_entry_id;
+      has_active_source_id_ = true;
+      SendActiveSourceEvent("start-file");
       break;
     }
     case MPV_EVENT_FILE_LOADED: {
       audio_recovery_.SetFileLoaded(true);
       EnsureAudioRecoveryTimer();
-      SendEvent("file-loaded");
+      SendActiveSourceEvent("file-loaded");
       break;
     }
     case MPV_EVENT_PLAYBACK_RESTART: {
-      SendEvent("playback-restart");
+      double position_seconds = 0.0;
+      const double* position = nullptr;
+      if (mpv_ && mpv_get_property(mpv_, "time-pos", MPV_FORMAT_DOUBLE, &position_seconds) >= 0) {
+        position = &position_seconds;
+      }
+      SendPlaybackRestartEvent(position);
       break;
     }
     default:
@@ -1227,6 +1217,11 @@ void MpvPlayer::SendPropertyChange(const char* name, mpv_node* data) {
   } else {
     fl_value_append_take(list, fl_value_new_null());
   }
+  if (has_active_source_id_) {
+    fl_value_append_take(list, fl_value_new_int(active_source_id_));
+  } else {
+    fl_value_append_take(list, fl_value_new_null());
+  }
 
   EventCallback callback;
   {
@@ -1235,6 +1230,32 @@ void MpvPlayer::SendPropertyChange(const char* name, mpv_node* data) {
   }
   if (callback) callback(list);
   fl_value_unref(list);
+}
+
+void MpvPlayer::SendActiveSourceEvent(const std::string& name) {
+  FlValue* data = nullptr;
+  if (has_active_source_id_) {
+    data = fl_value_new_map();
+    fl_value_set_string_take(data, "sourceId", fl_value_new_int(active_source_id_));
+  }
+  SendEvent(name, data);
+  if (data) fl_value_unref(data);
+}
+
+void MpvPlayer::SendPlaybackRestartEvent(const double* position_seconds) {
+  const bool has_position = position_seconds && std::isfinite(*position_seconds);
+  FlValue* data = nullptr;
+  if (has_active_source_id_ || has_position) {
+    data = fl_value_new_map();
+    if (has_active_source_id_) {
+      fl_value_set_string_take(data, "sourceId", fl_value_new_int(active_source_id_));
+    }
+    if (has_position) {
+      fl_value_set_string_take(data, "positionSeconds", fl_value_new_float(*position_seconds));
+    }
+  }
+  SendEvent("playback-restart", data);
+  if (data) fl_value_unref(data);
 }
 
 void MpvPlayer::SendEvent(const std::string& name, FlValue* data) {

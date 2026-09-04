@@ -7,6 +7,7 @@ import '../../models/livetv_capture_buffer.dart';
 import '../../media/media_source_info.dart';
 import '../../services/scrub_preview_source.dart';
 import '../../utils/desktop_window_padding.dart';
+import '../../utils/platform_detector.dart';
 import '../../i18n/strings.g.dart';
 import 'player_chrome_controller.dart';
 import 'widgets/circular_control_button.dart';
@@ -67,7 +68,7 @@ class MobileVideoControls extends StatefulWidget {
   // Live TV time-shift
   final CaptureBuffer? captureBuffer;
   final bool isAtLiveEdge;
-  final double streamStartEpoch;
+  final int Function(Duration position)? liveEpochForPosition;
   final ValueChanged<int>? onLiveSeek;
 
   /// Server ID for chapter thumbnails in the content strip
@@ -116,7 +117,7 @@ class MobileVideoControls extends StatefulWidget {
     this.liveChannelName,
     this.captureBuffer,
     this.isAtLiveEdge = true,
-    this.streamStartEpoch = 0,
+    this.liveEpochForPosition,
     this.onLiveSeek,
     this.serverId,
     this.showQueueTab = false,
@@ -314,6 +315,10 @@ class _MobileVideoControlsState extends State<MobileVideoControls> with SingleTi
   }
 
   Widget _buildTopBar(BuildContext context) {
+    // A portrait phone header is too narrow for the clock beside the back button,
+    // title, and track/chapter controls.
+    final isPortraitPhone =
+        PlatformDetector.isPhone(context) && MediaQuery.orientationOf(context) == Orientation.portrait;
     final topBar = _conditionalSafeArea(
       context: context,
       bottom: false, // Only respect top safe area when in portrait
@@ -326,6 +331,7 @@ class _MobileVideoControlsState extends State<MobileVideoControls> with SingleTi
           onStartAutoHide: widget.onStartAutoHide,
           trailing: widget.trackChapterControls,
           onBack: widget.onBack,
+          showClock: !isPortraitPhone,
         ),
       ),
     );
@@ -398,7 +404,7 @@ class _MobileVideoControlsState extends State<MobileVideoControls> with SingleTi
           builder: (context) => LiveTimelineBar(
             player: widget.player,
             captureBuffer: widget.captureBuffer!,
-            streamStartEpoch: widget.streamStartEpoch,
+            epochForPosition: widget.liveEpochForPosition!,
             isAtLiveEdge: widget.isAtLiveEdge,
             onSeekEnd: widget.onLiveSeek,
             horizontalLayout: false,

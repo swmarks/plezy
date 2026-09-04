@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -15,6 +16,7 @@
 #include <vector>
 
 #include "../../../shared/mpv/mpv_player_common.h"
+#include "hdr_probe.h"
 
 namespace mpv {
 struct InnerWindowSubclassState;
@@ -100,10 +102,15 @@ class MpvPlayer {
   void EventLoop();
   void HandleMpvEvent(mpv_event* event);
   void SendPropertyChange(const char* name, mpv_node* data);
+  void SendActiveSourceEvent(const std::string& name);
+  void SendPlaybackRestartEvent(const double* position_seconds);
   void SendEvent(const std::string& name, const flutter::EncodableMap& data = {});
   void MaybeRunAudioRecovery();
   void TryAudioReload(const char* reason, int attempt, uint64_t request_generation);
   void LogRecovery(const std::string& text);
+  // Reports the applied HDR pipeline options once per player, as a synthetic
+  // log-message on the first file load (when the Dart callback is wired).
+  void LogHdrPipelineOnce();
   void EnsureMpvInnerSubclassed();
   void DetachMpvInnerSubclass();
 
@@ -122,9 +129,22 @@ class MpvPlayer {
 
   plezy::mpv_common::AsyncRequestRegistry pending_requests_;
   plezy::mpv_common::PropertyObservationRegistry observed_properties_;
+  // The playlist entry whose START_FILE event was most recently dequeued.
+  // Event payloads copy this value before the plugin queues them to the
+  // platform thread, so a later START_FILE cannot relabel delayed properties.
+  int64_t active_source_id_ = 0;
+  bool has_active_source_id_ = false;
 
   // HDR state
   bool hdr_enabled_ = true;
+  // Set during Initialize when a Qualcomm Adreno GPU is present; names the
+  // tone-map LUT workaround so the first file load can log it.
+  bool adreno_tone_map_workaround_ = false;
+  bool hdr_config_logged_ = false;
+  // #2191 diagnostics: reports tone-map input churn (see hdr_probe.h). Owned
+  // by the player; ticked from the event thread, torn down before mpv.
+  std::unique_ptr<HdrProbe> hdr_probe_;
+  void LogHdrProbe(const std::string& text);
 
   void SetHDREnabled(bool enabled, StatusCallback callback = nullptr);
 };
