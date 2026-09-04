@@ -164,22 +164,6 @@ with open('android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore
 print('  [✓] Patched android/app/src/main/kotlin/com/edde746/plezy/exoplayer/ExoPlayerCore.kt')
 "
 
-# 5. Update build.gradle.kts with custom libmpv-android
-if [ -n "$MPV_VERSION" ] && [ -n "$MPV_SHA256" ]; then
-    python3 -c "
-import re
-with open('android/app/build.gradle.kts', 'r') as f:
-    text = f.read()
-
-text = re.sub(r'val mpvVersion = \".*?\"', f'val mpvVersion = \"$MPV_VERSION\"', text)
-text = re.sub(r'val mpvSha256 = \".*?\"', f'val mpvSha256 = \"$MPV_SHA256\"', text)
-text = re.sub(r'https://github\.com/edde746/libmpv-android', 'https://github.com/swmarks/libmpv-android', text)
-
-with open('android/app/build.gradle.kts', 'w') as f:
-    f.write(text)
-print('  [✓] Configured libmpv-android $MPV_VERSION ($MPV_SHA256) in build.gradle.kts')
-"
-fi
 
 # 6. Update unit test expectations in plex_playback_data_request_test.dart
 if [ -f "test/services/plex_playback_data_request_test.dart" ]; then
