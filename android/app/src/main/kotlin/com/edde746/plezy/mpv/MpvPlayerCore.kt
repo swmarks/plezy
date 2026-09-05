@@ -421,7 +421,7 @@ class MpvPlayerCore private constructor(
               setOption("vo", initialVideoOutput(hardwareDecoding))
               setOption("gpu-context", "android")
               setOption("opengl-es", "yes")
-              setOption("hwdec", "auto-safe")
+              setOption("hwdec", if (hardwareDecoding) "mediacodec,auto" else "no")
               setOption("hwdec-codecs", "all")
               // Keep AV1 film grain inside the decoder (dav1d). `auto` hands it
               // to any vo claiming VO_CAP_FILM_GRAIN, and gpu-next claims it on
