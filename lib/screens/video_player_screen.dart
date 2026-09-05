@@ -2371,13 +2371,12 @@ String _getHwdecValue(bool enabled) {
   if (Platform.isMacOS || Platform.isIOS) {
     return 'videotoolbox';
   } else if (Platform.isAndroid) {
-    // The fork vo=mediacodec takes MediaCodec decoder buffers straight to the
-    // video plane and copies software frames into the Surface's gralloc buffer
-    // when the frame is not a decoder handle (vo_mediacodec.c sw_present), so
-    // -copy displays correctly on the plane. It is also the only hardware path
-    // left under the GL vos below API 26, where the direct AImageReader interop
-    // mediacodec needs does not exist (minSdk 25 for Fire OS 6).
-    return 'auto-safe';
+    // The fork vo=mediacodec requires IMGFMT_MEDIACODEC because
+    // copying software frames would connect the Surface as a CPU producer,
+    // which permanently prevents EGL from binding it.
+    // 'mediacodec,auto' ensures mpv tries the direct-surface decoder first
+    // before falling back to auto.
+    return 'mediacodec,auto';
   } else {
     return 'auto'; // Windows, Linux
   }
