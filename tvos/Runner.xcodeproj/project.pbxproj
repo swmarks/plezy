@@ -1175,7 +1175,7 @@
 			repositoryURL = "https://github.com/swmarks/mpv-build";
 			requirement = {
 				kind = revision;
-				revision = 11909d51df703a26769b43d60668f0790d4a178d;
+				revision = 6b846da54b2b8c513f1cc5b2291f59f66d788bad;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
