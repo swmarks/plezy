@@ -209,8 +209,8 @@ if [ -f "lib/screens/video_player_screen.dart" ]; then
 with open('lib/screens/video_player_screen.dart', 'r') as f:
     text = f.read()
 
-if \"return 'mediacodec,mediacodec-copy';\" in text:
-    text = text.replace(\"return 'mediacodec,mediacodec-copy';\", \"return 'auto-safe';\")
+if \"return 'mediacodec,auto';\" in text:
+    text = text.replace(\"return 'mediacodec,auto';\", \"return 'auto-safe';\")
     with open('lib/screens/video_player_screen.dart', 'w') as f:
         f.write(text)
     print('  [✓] Fixed hwdec in lib/screens/video_player_screen.dart')

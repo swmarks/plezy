@@ -2376,7 +2376,7 @@ String _getHwdecValue(bool enabled) {
     // which permanently prevents EGL from binding it.
     // 'mediacodec,auto' ensures mpv tries the direct-surface decoder first
     // before falling back to auto.
-    return 'mediacodec,auto';
+    return 'auto-safe';
   } else {
     return 'auto'; // Windows, Linux
   }
