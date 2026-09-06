@@ -5,7 +5,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swmarks/mpv-build",
       "state" : {
-        "revision" : "6dc3a47558a4199e87dc34c0f05aaf8b0b13e4bd"
+        "revision" : "af9e7c157c1a6b3523248c786bccf1dceceaf7eb"
       }
     },
     {
