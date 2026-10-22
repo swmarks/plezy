@@ -251,7 +251,7 @@ AUDIO_DECODER_FUNC(jlong, ffmpegReset, jlong jContext, jbyteArray extraData) {
   }
 
   AVCodecID codecId = context->codec_id;
-  if (codecId == AV_CODEC_ID_TRUEHD) {
+  if (codecId == AV_CODEC_ID_TRUEHD || codecId == AV_CODEC_ID_AC4) {
     jboolean outputFloat = (jboolean)(context->request_sample_fmt == OUTPUT_FORMAT_PCM_FLOAT);
     // Release and recreate the context if the codec is TrueHD.
     // TODO: Figure out why flushing doesn't work for this codec.
