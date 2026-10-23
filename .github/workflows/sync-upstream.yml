@@ -1,0 +1,239 @@
+name: Sync Upstream & Release Android
+
+# Keeps the AC-4 fork current with no manual steps:
+#   1. swmarks/mpv-build := edde746/mpv-build main + fork/ overlay (AC-4 FFmpeg/mpv
+#      patches, android only). Its "Publish binaries" workflow then builds and
+#      records the android binaries.
+#   2. swmarks/plezy main := latest upstream Plezy release + scripts/patch-ac4.sh,
+#      pinned to the published swmarks/mpv-build commit.
+#   3. A new v<version>-ac4.<n> tag triggers build-android.yml.
+#
+# Needs secrets.GH_PAT (repo + workflow scopes): pushes made with the default
+# GITHUB_TOKEN cannot touch the other repository, cannot update workflow files
+# and do not trigger other workflows.
+
+on:
+  schedule:
+    - cron: '0 4 * * *' # daily, 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: "Cut a new release even if nothing changed upstream"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  FORK_MPV_REPO: swmarks/mpv-build
+  UPSTREAM_MPV_REPO: edde746/mpv-build
+  UPSTREAM_PLEZY_REPO: edde746/plezy
+
+jobs:
+  sync:
+    name: Sync mpv-build and Plezy
+    runs-on: ubuntu-latest
+    # A cold android rebuild in mpv-build can take ~2h; leave headroom.
+    timeout-minutes: 330
+    env:
+      GH_TOKEN: ${{ secrets.GH_PAT }}
+    steps:
+      - name: Require GH_PAT
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::secrets.GH_PAT is required (repo + workflow scopes)"
+            exit 1
+          fi
+
+      - name: Checkout Plezy fork
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          gh auth setup-git
+
+      # ------------------------------------------------------------------ #
+      # 1. mpv-build: rebuild the fork as upstream/main + fork/ overlay.
+      # ------------------------------------------------------------------ #
+      - name: Sync mpv-build fork
+        id: mpv
+        run: |
+          set -euo pipefail
+          git clone "https://github.com/${FORK_MPV_REPO}.git" "$RUNNER_TEMP/mpv-build"
+          cd "$RUNNER_TEMP/mpv-build"
+          git remote add upstream "https://github.com/${UPSTREAM_MPV_REPO}.git"
+          git fetch upstream main
+
+          if [ ! -x fork/apply.sh ]; then
+            echo "::error::${FORK_MPV_REPO} main has no fork/apply.sh overlay"
+            exit 1
+          fi
+
+          if git merge-base --is-ancestor upstream/main origin/main; then
+            echo "mpv-build fork already contains upstream/main ($(git rev-parse --short upstream/main))"
+            echo "pushed=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Upstream mpv-build moved to $(git rev-parse --short upstream/main); rebuilding fork"
+          cp -a fork "$RUNNER_TEMP/fork-overlay"
+          cp artifacts.json "$RUNNER_TEMP/prev-artifacts.json"
+
+          git reset --hard upstream/main
+          rm -rf fork && cp -a "$RUNNER_TEMP/fork-overlay" fork
+          FORK_REPO="$FORK_MPV_REPO" PREV_ARTIFACTS="$RUNNER_TEMP/prev-artifacts.json" ./fork/apply.sh
+
+          git add -A
+          git commit -m "fork: apply AC-4 overlay on upstream $(git rev-parse --short upstream/main)"
+          git push --force origin HEAD:main
+          echo "pushed=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Wait for the Publish run of the exact commit we pushed. A run with
+      # nothing stale finishes quickly with its build jobs skipped.
+      - name: Wait for mpv-build publish
+        if: steps.mpv.outputs.pushed != ''
+        env:
+          SHA: ${{ steps.mpv.outputs.pushed }}
+        run: |
+          set -euo pipefail
+          run_id=""
+          for _ in $(seq 1 40); do
+            run_id=$(gh run list --repo "$FORK_MPV_REPO" --workflow publish.yml --commit "$SHA" \
+              --json databaseId --jq '.[0].databaseId // empty')
+            [ -n "$run_id" ] && break
+            sleep 15
+          done
+          if [ -z "$run_id" ]; then
+            echo "::error::No Publish binaries run appeared for $SHA"
+            exit 1
+          fi
+          echo "Watching https://github.com/${FORK_MPV_REPO}/actions/runs/${run_id}"
+          # Poll instead of `gh run watch` to keep this job's log readable.
+          while true; do
+            read -r status conclusion < <(gh run view "$run_id" --repo "$FORK_MPV_REPO" \
+              --json status,conclusion --jq '"\(.status) \(.conclusion)"')
+            if [ "$status" = "completed" ]; then
+              if [ "$conclusion" = "success" ]; then
+                echo "Publish succeeded"
+                break
+              fi
+              echo "::error::mpv-build publish finished with '$conclusion'"
+              exit 1
+            fi
+            sleep 60
+          done
+
+      # Pin the newest fork commit: the publish run appends a
+      # "chore: binaries for ... [skip binaries]" commit that carries the
+      # manifest, so the pin must be read *after* it lands.
+      - name: Resolve mpv-build pin
+        id: pin
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/mpv-build"
+          git fetch origin main
+          sha=$(git rev-parse origin/main)
+          git show "origin/main:artifacts.json" > "$RUNNER_TEMP/artifacts.json"
+          python3 - "$RUNNER_TEMP/artifacts.json" "$FORK_MPV_REPO" <<'EOF'
+          import json, sys
+          manifest = json.load(open(sys.argv[1]))
+          android = manifest["platforms"]["android"]
+          base = android.get("assetBase", "")
+          print("android assetBase:", base)
+          for name, lib in sorted(android.get("libraries", {}).items()):
+              print(f"  {name}: {lib.get('key')}")
+          if f"/{sys.argv[2]}/" not in base:
+              print("::error::fork artifacts.json android section does not point at the fork's release")
+              sys.exit(1)
+          EOF
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "mpv-build pin: $sha"
+
+      # ------------------------------------------------------------------ #
+      # 2. Plezy: latest upstream release + AC-4 patches + fork mpv pin.
+      # ------------------------------------------------------------------ #
+      - name: Decide whether Plezy needs a release
+        id: plan
+        env:
+          MPV_SHA: ${{ steps.pin.outputs.sha }}
+          FORCE: ${{ inputs.force_release }}
+        run: |
+          set -euo pipefail
+          upstream_tag=$(gh api "repos/${UPSTREAM_PLEZY_REPO}/releases/latest" --jq '.tag_name')
+          current_version=$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          current_pin=$(python3 -c "import json; print(json.load(open('mpv-build.lock.json')).get('commit',''))")
+          echo "upstream Plezy: $upstream_tag | fork Plezy: $current_version"
+          echo "fork pin: $current_pin | wanted pin: $MPV_SHA"
+
+          needs=false
+          [ "${upstream_tag#v}" != "$current_version" ] && needs=true
+          [ "$current_pin" != "$MPV_SHA" ] && needs=true
+          [ "$FORCE" = "true" ] && needs=true
+          echo "needs_release=$needs" >> "$GITHUB_OUTPUT"
+          echo "upstream_tag=$upstream_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Rebuild Plezy fork on upstream release
+        if: steps.plan.outputs.needs_release == 'true'
+        env:
+          UPSTREAM_TAG: ${{ steps.plan.outputs.upstream_tag }}
+          MPV_SHA: ${{ steps.pin.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # Fork-only files survive the reset to upstream.
+          keep="scripts/patch-ac4.sh .github/workflows/build-android.yml .github/workflows/sync-upstream.yml"
+          mkdir -p "$RUNNER_TEMP/keep"
+          for f in $keep; do
+            mkdir -p "$RUNNER_TEMP/keep/$(dirname "$f")"
+            cp -a "$f" "$RUNNER_TEMP/keep/$f"
+          done
+
+          git remote add upstream "https://github.com/${UPSTREAM_PLEZY_REPO}.git" 2>/dev/null || true
+          git fetch upstream --tags --force
+          git reset --hard "refs/tags/${UPSTREAM_TAG}"
+
+          for f in $keep; do
+            mkdir -p "$(dirname "$f")"
+            cp -a "$RUNNER_TEMP/keep/$f" "$f"
+          done
+
+          ./scripts/set_native_revision.sh "$MPV_SHA" --repo "https://github.com/${FORK_MPV_REPO}"
+          bash scripts/patch-ac4.sh
+
+          python3 - <<'EOF'
+          import json, sys
+          base = json.load(open("mpv-build.lock.json"))["artifacts"]["android"]["assetBase"]
+          print("Plezy android assetBase:", base)
+          if "/swmarks/mpv-build/" not in base:
+              print("::error::set_native_revision.sh did not pin the fork's android binaries")
+              sys.exit(1)
+          EOF
+
+          version=$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          # Never move an existing tag: Obtainium and installed builds key on
+          # it. Bump the -ac4.<n> suffix instead.
+          git fetch origin --tags --force
+          n=1
+          while git rev-parse -q --verify "refs/tags/v${version}-ac4.${n}" >/dev/null; do
+            n=$((n + 1))
+          done
+          release_tag="v${version}-ac4.${n}"
+
+          git add -A
+          git commit --allow-empty -m "feat(ac4): Plezy ${version} with AC-4 audio (mpv-build ${MPV_SHA:0:12})"
+          git push --force origin HEAD:main
+          git tag "$release_tag"
+          # A tag pushed with the PAT triggers build-android.yml.
+          git push origin "refs/tags/${release_tag}"
+          echo "Pushed $release_tag"
+          echo "### Released \`$release_tag\`" >> "$GITHUB_STEP_SUMMARY"
