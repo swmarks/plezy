@@ -1043,6 +1043,8 @@ class MpvPlayerCore private constructor(
                   setOption("vo", initialVideoOutput(hardwareDecoding))
                   setOption("gpu-context", "android")
                   setOption("opengl-es", "yes")
+              setOption("hwdec", "auto-safe")
+              setOption("hwdec-codecs", "all")
                   // The Java MediaCodec wrapper, driven asynchronously where
                   // the platform is trusted to (rationale on
                   // initialDecoderEntries). This belongs to every video core,

@@ -3118,7 +3118,7 @@ String _getHwdecValue(bool enabled) {
     // under the GL vos. It stays because it is the only hardware path left
     // below API 26, where the direct AImageReader interop mediacodec needs
     // does not exist (minSdk 25 for Fire OS 6).
-    return 'mediacodec,mediacodec-copy';
+    return 'auto-safe';
   } else {
     return 'auto'; // Windows, Linux
   }
