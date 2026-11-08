@@ -934,7 +934,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
                 // the server substitutes the source codec, filters it against
                 // the same fMP4 set, and ships no audio at all for a source it
                 // cannot carry.
-                'AudioCodec': 'aac,mp3,ac3,eac3,flac,opus,dts,truehd',
+                'AudioCodec': 'aac,mp3,ac3,eac3,flac,opus,dts,truehd,ac4',
               },
             // MPEG-TS is the only Emby Live TV target (#2273); otherwise it
             // stays second as Jellyfin's fallback (#2198). Jellyfin drops every
@@ -952,7 +952,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
               'Container': 'ts',
               'Protocol': 'hls',
               'VideoCodec': _jellyfinTranscodeVideoCodecsTs(),
-              'AudioCodec': 'aac,mp3,ac3,eac3,opus,dts',
+              'AudioCodec': 'aac,mp3,ac3,eac3,opus,dts,ac4',
             },
             // Track playback transcode target: stereo mp3 over plain http.
             // Appended after the video profile so the first-entry-wins

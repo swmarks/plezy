@@ -1,0 +1,200 @@
+name: Build Android Release
+
+# Builds the AC-4 fork's APKs and publishes them as a GitHub Release with
+# direct .apk assets (Obtainium-friendly). Triggered by the version tags
+# sync-upstream.yml pushes (e.g. v2.24.0-ac4.1), or manually.
+
+on:
+  push:
+    tags:
+      - 'v*-ac4*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Publish a release under this tag (e.g. v2.24.0-ac4.1); omit to build artifacts only"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-android-${{ github.ref }}-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  build-android:
+    name: Build Android APKs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # Upstream's build.yml is the single place it names the Flutter SDK.
+      # Reading it here keeps the fork in lockstep after every sync.
+      - name: Resolve Flutter version
+        run: |
+          FLUTTER_VERSION=$(grep -m1 -E '^\s*FLUTTER_VERSION:' .github/workflows/build.yml | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ -z "$FLUTTER_VERSION" ]; then
+            echo "::error::Could not read FLUTTER_VERSION from .github/workflows/build.yml"
+            exit 1
+          fi
+          echo "FLUTTER_VERSION=$FLUTTER_VERSION" >> "$GITHUB_ENV"
+          echo "Flutter $FLUTTER_VERSION"
+
+      # The AC-4 decoder lives only in swmarks/mpv-build's android binaries.
+      # A lock that still names upstream's release would silently ship stock
+      # FFmpeg, which is exactly how v2.22.0-ac4.1 went out without AC-4.
+      - name: Verify the mpv-build pin is the AC-4 fork
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          lock = json.load(open("mpv-build.lock.json"))
+          base = lock.get("artifacts", {}).get("android", {}).get("assetBase", "")
+          print("repo:", lock.get("repo"), "commit:", lock.get("commit"))
+          print("android assetBase:", base)
+          if "/swmarks/mpv-build/" not in base:
+              print("::error::mpv-build.lock.json android assetBase is not swmarks/mpv-build; refusing to build a stock-FFmpeg APK")
+              sys.exit(1)
+          EOF
+
+      - name: Setup Java
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: false
+
+      - name: Cache Pub dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.yaml', 'pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Cache Gradle
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'mpv-build.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile --no-example
+
+      # Idempotent: a no-op on commits sync-upstream.yml already patched, but
+      # makes a manual dispatch on an unpatched ref still produce an AC-4 build.
+      - name: Apply AC-4 patches
+        run: bash scripts/patch-ac4.sh
+
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not set; release APKs must be signed with the fork's key"
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+
+      - name: Build APKs
+        run: >-
+          flutter build apk --release --split-per-abi
+          --dart-define=ENABLE_UPDATE_CHECK=true
+          --dart-define=GIT_COMMIT=${{ github.sha }}
+          --dart-define=ENABLE_DONATIONS=true
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f android/app/upload-keystore.jks android/key.properties
+
+      # Proves the shipped native libraries contain the AC-4 decoder, not just
+      # FFmpeg's stock "ac4" codec descriptor (which every build has). The
+      # probe strings are log messages that only exist in ac4dec.c.
+      - name: Smoke-test AC-4 decoder in APKs
+        run: |
+          set -euo pipefail
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            apk="build/app/outputs/flutter-apk/app-${abi}-release.apk"
+            dir="$(mktemp -d)"
+            unzip -q -o "$apk" "lib/${abi}/*.so" -d "$dir"
+            hit=""
+            for so in "$dir"/lib/"${abi}"/*.so; do
+              if strings -n 8 "$so" | grep -qE 'invalid aspx num env|aspx_num_sig'; then
+                hit="$(basename "$so")"
+                break
+              fi
+            done
+            if [ -z "$hit" ]; then
+              echo "::error::${abi}: no native library contains the AC-4 decoder"
+              ls -la "$dir/lib/${abi}"
+              exit 1
+            fi
+            echo "${abi}: AC-4 decoder found in ${hit}"
+            # ac4dec.c must be built with `#define ASSERT_LEVEL 2` (as in the
+            # libmpv-android patch); without it the decoder emits NaN bursts
+            # and playback is silent. This av_assert2 condition string only
+            # exists in the binary when that define is compiled in.
+            if ! strings -n 8 "$dir/lib/${abi}/${hit}" | grep -qF 'win_offset == s->frame_len_base'; then
+              echo "::error::${abi}: ${hit} was built without ASSERT_LEVEL 2 in ac4dec.c (silent AC-4 audio)"
+              exit 1
+            fi
+            echo "${abi}: ac4dec.c built with ASSERT_LEVEL 2"
+          done
+
+      - name: Prepare APK artifacts
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          TAG="${{ inputs.release_tag }}"
+          if [ -z "$TAG" ] && [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          fi
+          LABEL="${TAG:-v${VERSION}-ac4-dev}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          mkdir -p release-apks
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            cp "build/app/outputs/flutter-apk/app-${abi}-release.apk" "release-apks/plezy-${LABEL}-${abi}.apk"
+          done
+          ls -la release-apks/
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: plezy-android-apks
+          path: release-apks/*.apk
+
+      - name: Publish GitHub Release
+        if: env.TAG != ''
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        with:
+          tag_name: ${{ env.TAG }}
+          name: "Plezy ${{ env.TAG }} (with AC-4 Support)"
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: release-apks/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
