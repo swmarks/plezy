@@ -1101,6 +1101,8 @@ class MpvPlayerCore private constructor(
                   setOption("vo", initialVideoOutput(hardwareDecoding))
                   setOption("gpu-context", "android")
                   setOption("opengl-es", "yes")
+              setOption("hwdec", "auto-safe")
+              setOption("hwdec-codecs", "all")
                   // The vo=mediacodec OSD plane fills the letterbox opaque black,
                   // except where that black comes out gray in Dolby Vision output and
                   // a transparent margin stays black; see PlayerSurfaceHost.createOsdSurface.

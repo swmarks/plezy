@@ -2,27 +2,27 @@
   "artifacts": {
     "android": {
       "aar": {
-        "asset": "mpv-android-d633bbc71269.aar",
-        "checksum": "4bf8a9720bfdec00cb854fc73095ee3d322afc3caaa66d6322ad1dd4abc69df7",
-        "key": "d633bbc71269"
+        "asset": "mpv-android-b3503060c61c.aar",
+        "checksum": "e3b4f508a287d475f6e55e57ba9b94624601ba8ece64b7e5fd4635d077190d36",
+        "key": "b3503060c61c"
       },
-      "assetBase": "https://github.com/edde746/mpv-build/releases/download/binaries-f78e66727714",
+      "assetBase": "https://github.com/swmarks/mpv-build/releases/download/binaries-android",
       "symbols": {
         "arm64-v8a": {
-          "asset": "mpv-android-d633bbc71269-arm64-v8a-symbols.zip",
-          "checksum": "03bb7ca863174708c4c5518778cf4216742b0cd84fdd288cf7bdd37451ae1bca"
+          "asset": "mpv-android-b3503060c61c-arm64-v8a-symbols.zip",
+          "checksum": "48e1a2c151cbec843d2ed15ad86f8dde1181b87f980993a07d5b86bd94649724"
         },
         "armeabi-v7a": {
-          "asset": "mpv-android-d633bbc71269-armeabi-v7a-symbols.zip",
-          "checksum": "0c3fa9590e7036461a69f215e0a29ca405ff8a02b4a9b301c18a0f671b0130da"
+          "asset": "mpv-android-b3503060c61c-armeabi-v7a-symbols.zip",
+          "checksum": "b85ab1d67b4e5ab48e2f4bfddbf1295fdb7d7572ede3f80795da7ea5aec248a4"
         },
         "x86": {
-          "asset": "mpv-android-d633bbc71269-x86-symbols.zip",
-          "checksum": "3a1c60ad6339363233ee523a228f640e7e5c3a764e12210f8e2a8fc3b0c6ebfd"
+          "asset": "mpv-android-b3503060c61c-x86-symbols.zip",
+          "checksum": "deddc1999b0757aeccea2ba4a71ac4b7103ff414113e272f6d9c4ba9f74d31f2"
         },
         "x86_64": {
-          "asset": "mpv-android-d633bbc71269-x86_64-symbols.zip",
-          "checksum": "2db2d3a43b423220864205e560afe4a564e283713299a5508087f4fc3c91d69b"
+          "asset": "mpv-android-b3503060c61c-x86_64-symbols.zip",
+          "checksum": "8c73bd1c6253376ee4fe518857dd67a628e0974e0b703279823d7826142fa00c"
         }
       }
     },
@@ -75,7 +75,7 @@
       }
     }
   },
-  "commit": "6dbda06021b128b7adc30161bf7870977e575135",
+  "commit": "f479d11fe28cb9b9bb0817ad0921247eeca430ff",
   "formatVersion": 1,
-  "repo": "edde746/mpv-build"
+  "repo": "swmarks/mpv-build"
 }
