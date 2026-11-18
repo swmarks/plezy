@@ -4,9 +4,9 @@
     {
       "identity" : "mpv-build",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/edde746/mpv-build",
+      "location" : "https://github.com/swmarks/mpv-build",
       "state" : {
-        "revision" : "6dbda06021b128b7adc30161bf7870977e575135"
+        "revision" : "7e6177b7acf3e3a7be85e430f264811372dbd22a"
       }
     }
   ],
