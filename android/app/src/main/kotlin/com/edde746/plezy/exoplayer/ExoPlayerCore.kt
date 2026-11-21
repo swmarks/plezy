@@ -1970,7 +1970,15 @@ class ExoPlayerCore(private val activity: Activity) :
         "id" to trackId,
         "title" to format.label,
         "lang" to format.language,
-        "codec" to format.codecs,
+        "codec" to (when (format.sampleMimeType) {
+          "application/x-quicktime-tx3g", "application/x-mp4-cea-608" -> "mov_text"
+          "application/x-subrip" -> "subrip"
+          "text/x-ssa" -> "ass"
+          "text/vtt" -> "vtt"
+          "application/pgs" -> "pgs"
+          "application/vobsub" -> "vobsub"
+          else -> format.codecs ?: format.sampleMimeType?.substringAfterLast('/')
+        }),
         "default" to (format.selectionFlags and C.SELECTION_FLAG_DEFAULT != 0),
         "selected" to isSelected,
         "demux-channel-count" to format.channelCount,
@@ -2007,7 +2015,15 @@ class ExoPlayerCore(private val activity: Activity) :
         "id" to trackId,
         "title" to format.label,
         "lang" to format.language,
-        "codec" to format.codecs,
+        "codec" to (when (format.sampleMimeType) {
+          "application/x-quicktime-tx3g", "application/x-mp4-cea-608" -> "mov_text"
+          "application/x-subrip" -> "subrip"
+          "text/x-ssa" -> "ass"
+          "text/vtt" -> "vtt"
+          "application/pgs" -> "pgs"
+          "application/vobsub" -> "vobsub"
+          else -> format.codecs ?: format.sampleMimeType?.substringAfterLast('/')
+        }),
         "default" to (format.selectionFlags and C.SELECTION_FLAG_DEFAULT != 0),
         "forced" to (format.selectionFlags and C.SELECTION_FLAG_FORCED != 0),
         "selected" to isSelected,
@@ -2033,7 +2049,15 @@ class ExoPlayerCore(private val activity: Activity) :
         "id" to trackId,
         "title" to format.label,
         "lang" to format.language,
-        "codec" to format.codecs,
+        "codec" to (when (format.sampleMimeType) {
+          "application/x-quicktime-tx3g", "application/x-mp4-cea-608" -> "mov_text"
+          "application/x-subrip" -> "subrip"
+          "text/x-ssa" -> "ass"
+          "text/vtt" -> "vtt"
+          "application/pgs" -> "pgs"
+          "application/vobsub" -> "vobsub"
+          else -> format.codecs ?: format.sampleMimeType?.substringAfterLast('/')
+        }),
         "default" to (format.selectionFlags and C.SELECTION_FLAG_DEFAULT != 0),
         "selected" to group.isSelected
       )
@@ -2849,6 +2873,23 @@ class ExoPlayerCore(private val activity: Activity) :
     val uri = currentMediaUri ?: return
     val hasAnyVideoGroup = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
     val hasSelectedVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
+    // AC-4: also fall back when audio tracks exist but none are supported
+    val hasAnyAudioGroup = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
+    val hasSupportedAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO && (it.isSelected || it.isSupported) }
+    val audioFailed = hasAnyAudioGroup && !hasSupportedAudio
+
+    if (audioFailed) {
+      emitLog("warn", "fallback", "Audio track present but not supported (unsupported codec)")
+      requestFormatFallback(
+        mediaGeneration = mediaGeneration,
+        uri = uri,
+        positionMs = effectivePosition,
+        playWhenReady = exoPlayer?.playWhenReady ?: true,
+        errorMessage = "Audio track present but no decoder available"
+      )
+      return
+    }
+
     if (!hasAnyVideoGroup || hasSelectedVideo) return
 
     if (retryWithDvConversion("video track not selected")) return
