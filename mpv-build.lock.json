@@ -2,80 +2,80 @@
   "artifacts": {
     "android": {
       "aar": {
-        "asset": "mpv-android-d633bbc71269.aar",
-        "checksum": "4bf8a9720bfdec00cb854fc73095ee3d322afc3caaa66d6322ad1dd4abc69df7",
-        "key": "d633bbc71269"
+        "asset": "mpv-android-b3503060c61c.aar",
+        "checksum": "e3b4f508a287d475f6e55e57ba9b94624601ba8ece64b7e5fd4635d077190d36",
+        "key": "b3503060c61c"
       },
-      "assetBase": "https://github.com/edde746/mpv-build/releases/download/binaries-f78e66727714",
+      "assetBase": "https://github.com/swmarks/mpv-build/releases/download/binaries-android",
       "symbols": {
         "arm64-v8a": {
-          "asset": "mpv-android-d633bbc71269-arm64-v8a-symbols.zip",
-          "checksum": "03bb7ca863174708c4c5518778cf4216742b0cd84fdd288cf7bdd37451ae1bca"
+          "asset": "mpv-android-b3503060c61c-arm64-v8a-symbols.zip",
+          "checksum": "48e1a2c151cbec843d2ed15ad86f8dde1181b87f980993a07d5b86bd94649724"
         },
         "armeabi-v7a": {
-          "asset": "mpv-android-d633bbc71269-armeabi-v7a-symbols.zip",
-          "checksum": "0c3fa9590e7036461a69f215e0a29ca405ff8a02b4a9b301c18a0f671b0130da"
+          "asset": "mpv-android-b3503060c61c-armeabi-v7a-symbols.zip",
+          "checksum": "b85ab1d67b4e5ab48e2f4bfddbf1295fdb7d7572ede3f80795da7ea5aec248a4"
         },
         "x86": {
-          "asset": "mpv-android-d633bbc71269-x86-symbols.zip",
-          "checksum": "3a1c60ad6339363233ee523a228f640e7e5c3a764e12210f8e2a8fc3b0c6ebfd"
+          "asset": "mpv-android-b3503060c61c-x86-symbols.zip",
+          "checksum": "deddc1999b0757aeccea2ba4a71ac4b7103ff414113e272f6d9c4ba9f74d31f2"
         },
         "x86_64": {
-          "asset": "mpv-android-d633bbc71269-x86_64-symbols.zip",
-          "checksum": "2db2d3a43b423220864205e560afe4a564e283713299a5508087f4fc3c91d69b"
+          "asset": "mpv-android-b3503060c61c-x86_64-symbols.zip",
+          "checksum": "8c73bd1c6253376ee4fe518857dd67a628e0974e0b703279823d7826142fa00c"
         }
       }
     },
     "linux": {
-      "assetBase": "https://github.com/edde746/mpv-build/releases/download/binaries-42bac6793cc8",
+      "assetBase": "https://github.com/edde746/mpv-build/releases/download/binaries-27c71f19728e",
       "assets": {
         "aarch64": {
-          "asset": "libmpv-linux-4ac45772c2fc-aarch64.tar.zst",
-          "checksum": "a09af35de0e7f10131ef34f0d8ba2e4060b1cab75ecf1db6da72aa3aa1a0f6bb"
+          "asset": "libmpv-linux-f0c35a903e28-aarch64.tar.zst",
+          "checksum": "17b55de51b3697f5b5a5cfd923ec495f40c73623e066f01faed8d364a991f64a"
         },
         "x86_64": {
-          "asset": "libmpv-linux-4ac45772c2fc-x86_64.tar.zst",
-          "checksum": "d62483d76d3b0f988c2117bb1843c10f9d008954824f14775a549afe41fbda89"
+          "asset": "libmpv-linux-f0c35a903e28-x86_64.tar.zst",
+          "checksum": "03f9e47e1d09884a85d6b2e3a6552499a9a71c7f33696b5d2335dadbc5bccc77"
         }
       },
-      "key": "4ac45772c2fc",
+      "key": "f0c35a903e28",
       "symbols": {
         "aarch64": {
-          "asset": "libmpv-linux-4ac45772c2fc-aarch64-symbols.zip",
-          "checksum": "b818631c61987e2d4c7d3e2e6262f15dad9f0904f4bb75d21039ecbca2580b25"
+          "asset": "libmpv-linux-f0c35a903e28-aarch64-symbols.zip",
+          "checksum": "6b5d8f2aba14e25b750a26ad64639e1fe5b82cfc73643d7877acbfef4957c45b"
         },
         "x86_64": {
-          "asset": "libmpv-linux-4ac45772c2fc-x86_64-symbols.zip",
-          "checksum": "ddafedaae053d0ac5bffc8c9501e2095ca2d5495a0b921cdc340a50720b7e9a5"
+          "asset": "libmpv-linux-f0c35a903e28-x86_64-symbols.zip",
+          "checksum": "c210ca1c44820b709f9de6fe5c4f0ef0ca5b0ef2e1a1862b343d2fa579f4eff9"
         }
       }
     },
     "windows": {
-      "assetBase": "https://github.com/edde746/mpv-build/releases/download/binaries-42bac6793cc8",
+      "assetBase": "https://github.com/edde746/mpv-build/releases/download/binaries-27c71f19728e",
       "assets": {
         "aarch64": {
-          "asset": "libmpv-windows-2f8afcbefc37-aarch64.zip",
-          "checksum": "00828f828152910f48688cac560a89d7a06210a2daffd04ce0de0abf5952ee8f"
+          "asset": "libmpv-windows-aa2baa6bd74e-aarch64.zip",
+          "checksum": "1a83a1cbc103eeeab388aae8034dc79d44306f1b97d6db9b3f2a7ef5281bc7e8"
         },
         "x86_64": {
-          "asset": "libmpv-windows-2f8afcbefc37-x86_64.zip",
-          "checksum": "b0e807d929a1f019264d01498daccef5681164c99907e3d4afcfbefbc798cf0a"
+          "asset": "libmpv-windows-aa2baa6bd74e-x86_64.zip",
+          "checksum": "7f454cd89e4afeeb73c7cfca4cdde510aed8e0535b3c1ddd9d221cd65cc07df9"
         }
       },
-      "key": "2f8afcbefc37",
+      "key": "aa2baa6bd74e",
       "symbols": {
         "aarch64": {
-          "asset": "libmpv-windows-2f8afcbefc37-aarch64-symbols.zip",
-          "checksum": "45dfde2bd9f52a66664a4d6738cf1cfa9d64a1760b764f5ac1e621aa4d2dbf6b"
+          "asset": "libmpv-windows-aa2baa6bd74e-aarch64-symbols.zip",
+          "checksum": "9d6c05087684c477555e978f6c91a0dd40b63bf91c33ed67638566da15f0b75d"
         },
         "x86_64": {
-          "asset": "libmpv-windows-2f8afcbefc37-x86_64-symbols.zip",
-          "checksum": "27e86f28a75950878aee8c712aa884543baa0574a6d897c56c6d9e00e6d1db7a"
+          "asset": "libmpv-windows-aa2baa6bd74e-x86_64-symbols.zip",
+          "checksum": "75647573c3322fe3b1e6cff19ed6e6dbd6dc9a5ac28ca204d22e37246c175ec4"
         }
       }
     }
   },
-  "commit": "6dbda06021b128b7adc30161bf7870977e575135",
+  "commit": "1293ccfd9291435c398471a9de896e440e4d56e7",
   "formatVersion": 1,
-  "repo": "edde746/mpv-build"
+  "repo": "swmarks/mpv-build"
 }
